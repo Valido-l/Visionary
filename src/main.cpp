@@ -95,7 +95,7 @@ int main()
     auto window = sf::RenderWindow(sf::VideoMode({Globals::windowWidth, Globals::windowHeight}), "Visionary");
     window.setFramerateLimit(144);
 
-    TextEditor editor({0, 0}, {Globals::windowWidth, Globals::windowHeight});
+    TextEditor editor({0, 0}, {static_cast<float>(Globals::windowWidth), static_cast<float>(Globals::windowHeight)});
 	sf::Clock deltaClock, clock; 
 
     const auto onClose = [&window](const sf::Event::Closed& closedEvent) {
