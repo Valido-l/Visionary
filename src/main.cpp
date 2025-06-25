@@ -9,15 +9,26 @@ namespace Globals {
     uint32_t windowHeight = 600;
 }
 
-class TextEditor {
+class TextEditor : public Drawable {
 public:
-    TextEditor() : m_Lines() {}
-
-    void Draw(sf::RenderWindow& window) noexcept {
-        m_Lines.Draw(window);
+    TextEditor(sf::Vector2f pos, sf::Vector2f size) : m_Lines({10, 10}) {
+        SetPosition(pos); SetSize(size);
     }
 
-    void Update(double deltaTime) noexcept {
+    void Draw(sf::RenderWindow& window) const override {
+        const auto oldView = window.getView();
+        sf::Vector2u windowSize = window.getSize();    
+
+        sf::View textEditorView(m_Size / 2.0f, m_Size);
+        textEditorView.setViewport({{m_Position.x / windowSize.x, m_Position.y / windowSize.y}, {m_Size.x / windowSize.x, m_Size.y / windowSize.y}});
+    
+        window.setView(textEditorView);
+        m_Lines.Draw(window);
+
+        window.setView(oldView); 
+    }
+
+    void Update(double deltaTime) noexcept override {
         m_Lines.Update(deltaTime);
     }
 
@@ -72,29 +83,31 @@ public:
     }
 
 private:
+    void OnTransformChanged() override {
+        m_Lines.SetSize(m_Size);
+    }
+
     TextBox m_Lines;
 };
 
 int main()
 {
-    auto window = sf::RenderWindow(sf::VideoMode({800u, 600u}), "Visionary");
+    auto window = sf::RenderWindow(sf::VideoMode({Globals::windowWidth, Globals::windowHeight}), "Visionary");
     window.setFramerateLimit(144);
 
-    TextEditor editor;
+    TextEditor editor({0, 0}, {Globals::windowWidth, Globals::windowHeight});
 	sf::Clock deltaClock, clock; 
-	sf::View mainView(	{ static_cast<float>(Globals::windowWidth), static_cast<float>(Globals::windowHeight) },
-						{ static_cast<float>(Globals::windowWidth), static_cast<float>(Globals::windowHeight) });
-	
+
     const auto onClose = [&window](const sf::Event::Closed& closedEvent) {
         window.close();
     };
 
-    const auto onResize = [&window, &mainView](const sf::Event::Resized& resizedEvent) {
+    const auto onResize = [&window, &editor](const sf::Event::Resized& resizedEvent) {
 		Globals::windowWidth = resizedEvent.size.x; Globals::windowHeight = resizedEvent.size.y;
 		auto size = sf::Vector2f(static_cast<float>(Globals::windowWidth),
                                  static_cast<float>(Globals::windowHeight));
-		mainView.setSize(size);
-		mainView.setCenter(size / 2.0f);
+
+        editor.SetSize(size);
 	};
 
     const auto onKeyPressed = [&editor](const sf::Event::KeyPressed& keyPressedEvent) {
@@ -109,11 +122,13 @@ int main()
     {
         double deltaTime = deltaClock.restart().asSeconds();
         window.handleEvents(onClose, onResize, onKeyPressed, onTextEntered);
-
-        window.setView(mainView);
-
+  
+        editor.Update(deltaTime);
+        
         window.clear();
+        
         editor.Draw(window);
+
         window.display();
     }
 

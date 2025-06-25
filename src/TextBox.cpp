@@ -1,101 +1,121 @@
 #include "TextBox.h"
+#include <iostream>
 
 constexpr uint64_t TEXT_SIZE = 30;
 constexpr uint64_t TAB_WIDTH = 4;
 
-// Helper. Used to get the default text for drawing. 
-static sf::Text& GetTextBase() {
-    static bool firstCall = true;
-    static sf::Font font;
+TextBox::TextBox(sf::Vector2f pos, sf::Vector2f size) : 
+                    m_Index(0), m_String("Hello, World!"),
+                    m_Cursor({ 2.0f, TEXT_SIZE }), m_Text(), 
+                    m_Background(size), m_LineHighlight({size.x, TEXT_SIZE}),
+                    m_Scroll(0.f, 0.f), m_ShouldUpdateString(true), m_ShouldUpdateView(true) {
 
-    if (firstCall && !font.openFromFile("Fonts/anon.ttf"))
-        throw std::runtime_error("Cannot load the font.");
+    SetPosition(pos); SetSize(size);
 
-    static sf::Text text(font, "", TEXT_SIZE);
+    m_Background.setOutlineColor(sf::Color(70, 70, 70, 255));
+    m_Background.setFillColor(sf::Color(90, 90, 90, 255));
+    m_Background.setOutlineThickness(1.0f);
 
-    if (firstCall) {
-        text.setFillColor(sf::Color::White);
-        text.setPosition({ 0, 0 });
-        firstCall = false;
-    }
-
-    return text;
-}
-
-TextBox::TextBox() : m_Index(0), m_Text("Hello.World"),
-                     m_CursorShape({ 2.0f, TEXT_SIZE }), m_LineHighlight({800.0f, TEXT_SIZE}) {
-    m_CursorShape.setFillColor(sf::Color::White);
     m_LineHighlight.setOutlineColor(sf::Color(90, 90, 90, 100));
     m_LineHighlight.setFillColor(sf::Color(50, 50, 50, 100));
-    m_LineHighlight.setOutlineThickness(1.0f);
+    m_LineHighlight.setOutlineThickness(2.0f);
 }
 
-void TextBox::Draw(sf::RenderWindow& window) noexcept {
-    sf::Text text(GetTextBase()); text.setString(m_Text);
-    m_CursorShape.setPosition(text.findCharacterPos(m_Index));
+void TextBox::Draw(sf::RenderWindow& window) const {    
+    const auto oldView = window.getView();
+    sf::Vector2u windowSize = window.getSize();                
 
-    m_LineHighlight.setPosition({1, text.findCharacterPos(m_Index).y});
+    sf::View textBoxView(m_Size / 2.0f + m_Scroll, m_Size);
+    textBoxView.setViewport({{m_Position.x / windowSize.x, m_Position.y / windowSize.y}, {m_Size.x / windowSize.x, m_Size.y / windowSize.y}});
 
-    window.draw(text);
-    window.draw(m_CursorShape);
+    window.setView(textBoxView);
+
+    window.draw(m_Background);
+    m_Cursor.Draw(window);
+    m_Text.Draw(window); 
     window.draw(m_LineHighlight);
+
+    window.setView(oldView); 
 }
 
 void TextBox::Update(double deltaTime) noexcept {
+    m_Text.SetString(m_String);
+    
+    m_Cursor.Update(deltaTime);
+    m_Text.Update(deltaTime); 
+    
+    UpdateString();
+    UpdateView();
+}
 
+void TextBox::OnTransformChanged() {
+    m_Text.SetPosition(m_Position);
+    m_Background.setPosition(m_Position + m_Scroll);
+
+    m_Background.setSize(m_Size);
+    m_LineHighlight.setSize({m_Size.x, m_LineHighlight.getSize().y});
+}
+
+void TextBox::UpdateString() {
+    if(!m_ShouldUpdateString)
+        return;
+
+    m_Text.SetString(m_String); m_ShouldUpdateString = false;
+}
+
+void TextBox::UpdateView() {
+    if(!m_ShouldUpdateView)
+        return;
+
+    m_Cursor.SetPosition(m_Text.FindCharacterPos(m_Index));
+    m_LineHighlight.setPosition({m_Position.x + m_Scroll.x, m_Text.FindCharacterPos(m_Index).y});
+    m_Background.setPosition(m_Position + m_Scroll);
+
+    m_ShouldUpdateView = false;
 }
 
 size_t TextBox::GetCursorPos() const noexcept {
     return m_Index;
 }
 
-char TextBox::GetRightChar() const {
-    if (m_Index > m_Text.size())
-        throw std::out_of_range("Tried accessing a character out of bounds");
-
-    if (m_Index == m_Text.size())
+char TextBox::GetRightChar() const noexcept {
+    if (m_Index == m_String.size())
         return '\0';
 
-    return m_Text.at(m_Index);
+    return m_String.at(m_Index);
 }
 
-char TextBox::GetLeftChar() const {
-    if (m_Index > m_Text.size())
-        throw std::out_of_range("Tried accessing a character out of bounds");
-
+char TextBox::GetLeftChar() const noexcept {
     if (m_Index == 0)
         return '\0';
 
-    return m_Text.at(m_Index - 1);
+    return m_String.at(m_Index - 1);
 }
 
-void TextBox::Add(char c) {
-    if (m_Text.size() < m_Index)
-        throw std::out_of_range("Tried adding out of range.");
-    m_Text.insert(m_Text.begin() + m_Index, c);
+void TextBox::Add(char c) noexcept {
+    m_String.insert(m_String.begin() + m_Index, c);
     MoveRight();
+
+    m_ShouldUpdateString = true;
 }
 
-void TextBox::Add(const std::string& str) {
-    if (m_Text.size() < m_Index)
-    throw std::out_of_range("Tried adding out of range.");
-    m_Text.insert(m_Index, str);
+void TextBox::Add(const std::string& str) noexcept {
+    m_String.insert(m_Index, str);
     MoveTo(m_Index + str.size());
+
+    m_ShouldUpdateString = true;
 }
 
-bool TextBox::Remove() {
+bool TextBox::Remove() noexcept {
     // Do nothing if the cursor is on the first character.
     if (m_Index == 0)
         return false;
 
-    if (m_Index > m_Text.size())
-        throw std::out_of_range("Tried removing out of range.");
-
-    m_Text.erase(m_Text.begin() + m_Index - 1); // -1 because we're deleting the character left of the cursor. 
-    return MoveLeft() || true;
+    // -1 because we're deleting the character left of the cursor. 
+    return RemoveRange(m_Index - 1, m_Index);
 }
 
-bool TextBox::SkipRemove() {
+bool TextBox::SkipRemove() noexcept {
     // Save the current cursor position, skip to the left,
     // and delete all characters in between.
     size_t initialIndex = m_Index;
@@ -104,21 +124,23 @@ bool TextBox::SkipRemove() {
 
 bool TextBox::RemoveRange(size_t begin, size_t end) noexcept {
     // Ensure the range is actually valid. 
-    if (begin > end || begin > m_Text.size() || end > m_Text.size())
+    if (begin > end || begin > m_String.size() || end > m_String.size())
         return false;
 
-    m_Text.erase(m_Text.begin() + begin, m_Text.begin() + end);
-    m_Index = begin;
+    m_String.erase(m_String.begin() + begin, m_String.begin() + end);
+    MoveTo(begin);
+
+    m_ShouldUpdateString = true;
 
     return true;
 }
 
-void TextBox::AddTab() {
+void TextBox::AddTab() noexcept {
     for(size_t i = 0; i < TAB_WIDTH; i++)
         Add(' ');
 }
 
-bool TextBox::RemoveTab() {
+bool TextBox::RemoveTab() noexcept {
     for (size_t i = 0; i < TAB_WIDTH; i++) {
         if (GetLeftChar() == ' ')
             Remove();
@@ -129,15 +151,15 @@ bool TextBox::RemoveTab() {
     return true;
 }
 
-bool TextBox::MoveTo(size_t index) {
-    if (index >= m_Text.size())
+bool TextBox::MoveTo(size_t index) noexcept {
+    if (index > m_String.size())
         return false;
 
-    m_Index = index;
+    m_Index = index; m_ShouldUpdateView = true;
     return true;
 }
 
-bool TextBox::MoveUp() {
+bool TextBox::MoveUp() noexcept {
     // If we're on the first line, we can't move up.
     if (OnFirstLine())
         return false;
@@ -145,22 +167,22 @@ bool TextBox::MoveUp() {
     // Get the distance of the lower line and set the cursor
     // to the beginning of the line.
     size_t lowerLineStartDistance = GetDistanceFromLineStart();
-    m_Index -= lowerLineStartDistance;
+    MoveTo(m_Index - lowerLineStartDistance);
 
     // Do the same for the upper line.
     size_t upperLineStartDistance = GetDistanceFromLineStart();
-    m_Index -= upperLineStartDistance;
+    MoveTo(m_Index - upperLineStartDistance);
 
     // Now the cursor is at the start of the second (upper) line.
     // If lowerLineStartDistance > upperLineStartDistance, we don't want to
     // overshoot and add too much, and if upperLineStartDistance > lowerLineStartDistance,
     // we want to keep the same relative row. 
-    m_Index += std::min(lowerLineStartDistance, upperLineStartDistance);
+    MoveTo(m_Index + std::min(lowerLineStartDistance, upperLineStartDistance));
 
     return true;
 }
 
-bool TextBox::MoveDown() {
+bool TextBox::MoveDown() noexcept {
     // If we're on the last line, we can't move down.
     if (OnLastLine())
         return false;
@@ -180,49 +202,51 @@ bool TextBox::MoveDown() {
     // if firstLineStartDistance > secondLineEndDistance, we don't want to
     // overshoot and add too much, and if secondLineEndDistance > firstLineStartDistance,
     // we want to keep the same relative row. 
-    m_Index += std::min(firstLineStartDistance, secondLineEndDistance);
+    MoveTo(m_Index + std::min(firstLineStartDistance, secondLineEndDistance));
 
     return true;
 }
 
-bool TextBox::MoveLeft() {
+bool TextBox::MoveLeft() noexcept {
     if (m_Index == 0)
         return false;
 
-    m_Index--;
+    MoveTo(m_Index - 1);
     return true;
 }
 
-bool TextBox::MoveRight() {
-    if (m_Index >= m_Text.size())
+bool TextBox::MoveRight() noexcept {
+    if (m_Index >= m_String.size())
         return false;
 
-    m_Index++;
+    MoveTo(m_Index + 1);
     return true;
 }
 
 void TextBox::MoveBegin() noexcept {
-    m_Index = 0;
+    MoveTo(0);
 }
 
 void TextBox::MoveEnd() noexcept {
-    m_Index = m_Text.size();
+    MoveTo(m_String.size());
 }
 
 void TextBox::MoveStartLine() noexcept {
-    if (GetLeftChar() == '\n')
+    char leftChar = GetLeftChar();
+    if (leftChar == '\n' || leftChar == '\0')
         return;
 
     size_t nextLeftNewline = FindFirstLeft('\n');
-    m_Index = (nextLeftNewline != std::string::npos) ? nextLeftNewline + 1 : 0;
+    MoveTo((nextLeftNewline != std::string::npos) ? nextLeftNewline + 1 : 0);
 }
 
 void TextBox::MoveEndLine() noexcept {
-    if (GetRightChar() == '\n')
+    char rightChar = GetRightChar();
+    if (rightChar == '\n' || rightChar == '\0')
         return; 
 
     size_t nextRightNewline = FindFirstRight('\n');
-    m_Index = (nextRightNewline != std::string::npos) ? nextRightNewline : m_Text.size();
+    MoveTo((nextRightNewline != std::string::npos) ? nextRightNewline : m_String.size());
 }
 
 bool TextBox::SkipLeft() noexcept {
@@ -269,7 +293,7 @@ bool TextBox::SkipLeft() noexcept {
 
 bool TextBox::SkipRight() noexcept {
     // We cannot skip if we're at the end.
-    if (m_Index == m_Text.size())
+    if (m_Index == m_String.size())
        return false;
 
     char rightChar = GetRightChar();
@@ -309,11 +333,11 @@ bool TextBox::SkipRight() noexcept {
 }
 
 size_t TextBox::FindFirstLeft(const std::function<bool(char)>& pred) const {
-    if (m_Index == 0 || m_Index > m_Text.size())
+    if (m_Index == 0 || m_Index > m_String.size())
         return std::string::npos;
 
     for (size_t i = m_Index - 1;; --i) {
-        if (pred(m_Text[i]))
+        if (pred(m_String[i]))
             return i;
         if (i == 0) // Check the 0th index too.
             break;
@@ -323,11 +347,11 @@ size_t TextBox::FindFirstLeft(const std::function<bool(char)>& pred) const {
 }
 
 size_t TextBox::FindFirstRight(const std::function<bool(char)>& pred) const {
-    if (m_Index >= m_Text.size())
+    if (m_Index >= m_String.size())
         return std::string::npos;
 
-    for (size_t i = m_Index + 1; i < m_Text.size(); i++) {
-        if (pred(m_Text[i]))
+    for (size_t i = m_Index + 1; i < m_String.size(); i++) {
+        if (pred(m_String[i]))
             return i;
     }
 
@@ -335,11 +359,11 @@ size_t TextBox::FindFirstRight(const std::function<bool(char)>& pred) const {
 }
 
 size_t TextBox::FindFirstLeft(char toFind) const {
-    if (m_Index == 0 || m_Index > m_Text.size())
+    if (m_Index == 0 || m_Index > m_String.size())
         return std::string::npos;
 
     for (size_t i = m_Index - 1;; --i) {
-        if (m_Text[i] == toFind)
+        if (m_String[i] == toFind)
             return i;
         if (i == 0) // Check the 0th index too.
             break;
@@ -349,11 +373,11 @@ size_t TextBox::FindFirstLeft(char toFind) const {
 }
 
 size_t TextBox::FindFirstRight(char toFind) const {
-    if (m_Index >= m_Text.size())
+    if (m_Index >= m_String.size())
         return std::string::npos;
 
-    for (size_t i = m_Index + 1; i < m_Text.size(); i++) {
-        if (m_Text[i] == toFind)
+    for (size_t i = m_Index + 1; i < m_String.size(); i++) {
+        if (m_String[i] == toFind)
             return i;
     }
 
@@ -367,7 +391,7 @@ size_t TextBox::GetDistanceFromLineStart() const noexcept {
 
 size_t TextBox::GetDistanceToLineEnd() const noexcept {
     size_t nextRightNewline = FindFirstRight('\n');
-    return (nextRightNewline == std::string::npos) ? m_Text.size() - m_Index : nextRightNewline - m_Index;
+    return (nextRightNewline == std::string::npos) ? m_String.size() - m_Index : nextRightNewline - m_Index;
 }
 
 bool TextBox::OnFirstLine() const noexcept {
