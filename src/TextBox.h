@@ -68,6 +68,14 @@ public:
     void Add(const std::string& str) noexcept;
 
     /**
+     * @brief   Adds a tab where the cursor is, by inserting spaces. 
+     * 
+     * @note    The number of spaces depends on the defined tab width.
+     * @note    Clears selection. 
+     */
+    void AddTab() noexcept;
+
+    /**
      * @brief   Removes a character to the left of the cursor.
      * 
      * @note    If selecting, deletes the selected text.
@@ -99,14 +107,6 @@ public:
     bool RemoveRange(size_t begin, size_t end) noexcept;
 
     /**
-     * @brief   Adds a tab where the cursor is, by inserting spaces. 
-     * 
-     * @note    The number of spaces depends on the defined tab width.
-     * @note    Clears selection. 
-     */
-    void AddTab() noexcept;
-
-    /**
      * @brief   Removes a tab, by removing leading spaces. 
      * 
      * @note    The number of spaces removed depends on the defined tab width.
@@ -114,6 +114,33 @@ public:
      * @returns True if at least one space was removed, false otherwise. 
      */
     bool RemoveTab() noexcept;
+
+    /**
+     * @brief   Check if text is currently being selected.
+     * 
+     * @returns True if selecting, false otherwise. 
+     */
+    bool IsSelecting() const noexcept;
+
+    /**
+     * @brief   Starts selecting from the current position of the cursor.
+     */
+    void StartSelecting() noexcept;
+
+    /**
+     * @brief   Stops selecting entirely.
+     */
+    void StopSelecting() noexcept;
+
+    /**
+     * @brief   Get the currently selected text.
+     * 
+     * @returns The currently selected text, or an empty string
+     *          if nothing is selected.
+     */
+    std::string GetSelection() const noexcept;
+
+    // TODO: Add Select All and Copy functions. 
 
     /**
      * @brief   Moves the cursor to an index.
@@ -169,22 +196,22 @@ public:
     /**
      * @brief   Moves the cursor to the very start of the text.
      */
-    void MoveBegin() noexcept;
+    void MoveTop() noexcept;
 
     /**
      * @brief   Moves the cursor to the very end of the text.
      */
-    void MoveEnd() noexcept;
+    void MoveBottom() noexcept;
 
     /**
      * @brief   Moves the cursor to the start of the line.
      */
-    void MoveStartLine() noexcept;
+    void MoveStart() noexcept;
 
     /**
      * @brief   Moves the cursor to the end of the line.
      */
-    void MoveEndLine() noexcept;
+    void MoveEnd() noexcept;
 
     /**
      * @brief   Pastes the contents of the clipboard where the cursor's current position is.
@@ -194,13 +221,10 @@ public:
     void Paste();
 
 private:
-     /**
-     * @brief   Checks if the cursor position is valid (within the string).
-     *
-     * @throws  std::logic_error if the cursor is past the end of m_String. 
-     *          
+    /**
+     * @brief   Clears the selected text.
      */
-    void ValidateCursorPos() const;
+    void ClearSelection() noexcept;
 
     /**
      * @brief       Scan left from the current cursor position (exclusive) until a character
@@ -289,10 +313,16 @@ private:
      */
     void OnTransformChanged() override;
 
+    /**
+     * @brief If the cursor is beyond the string's end, clamp it to the end. 
+     */
+    void ClampCursor() noexcept;
+
     Cursor m_Cursor; Text m_Text;
 
     sf::RectangleShape m_Background, m_LineHighlight;
-    size_t m_Index; // The current position of the cursor.
+    size_t m_Index; // The current position of the cursor. 
+    size_t m_SelectIndex; // The position of the cursor when selection was started. No selection is indicated by 'std::string::npos'.
     sf::View m_View; // The view that displays the TextBox. 
     sf::Vector2f m_Scroll; // The scroll of the TextBox. 
 

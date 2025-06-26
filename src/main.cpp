@@ -61,9 +61,9 @@ public:
         }
 
         if (key == sf::Keyboard::Key::Home)
-            (!shiftPressed) ? m_Lines.MoveStartLine() : m_Lines.MoveBegin();
+            (!shiftPressed) ? m_Lines.MoveStart() : m_Lines.MoveTop();
         if (key == sf::Keyboard::Key::End)
-            (!shiftPressed) ? m_Lines.MoveEndLine() : m_Lines.MoveEnd();
+            (!shiftPressed) ? m_Lines.MoveEnd() : m_Lines.MoveBottom();
 
         if (key == sf::Keyboard::Key::Up)
             m_Lines.MoveUp();
@@ -72,6 +72,13 @@ public:
 
         if(controlPressed && key == sf::Keyboard::Key::V)
             m_Lines.Paste();
+
+        if(key == sf::Keyboard::Key::LShift) {
+            (!m_Lines.IsSelecting()) ? m_Lines.StartSelecting() : m_Lines.StopSelecting();
+        }
+
+        if(key == sf::Keyboard::Key::Escape && m_Lines.IsSelecting())
+            m_Lines.StopSelecting();
     }
 
     void OnTextEntered(const sf::Event::TextEntered& textEnteredEvent) noexcept {

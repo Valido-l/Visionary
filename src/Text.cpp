@@ -25,6 +25,9 @@ Text::Text(const std::string& str, sf::Vector2f pos) : m_Text(GetTextBase()) {
 }
 
 void Text::Draw(sf::RenderWindow& window) const {
+    for(const auto& highlight : m_Highlights)
+        window.draw(highlight);
+
     window.draw(m_Text);
 }
 
@@ -36,8 +39,33 @@ void Text::OnTransformChanged() {
 
 void Text::SetString(const std::string& str) {
     m_Text.setString(str);
+    m_StringSize = str.size();
 }
 
 sf::Vector2f Text::FindCharacterPos(size_t index) {
     return m_Text.findCharacterPos(index);
+}
+
+void Text::ClearHighlight() noexcept {
+    m_Highlights.clear();
+}
+
+void Text::Highlight(size_type begin, size_type end) noexcept {
+    ClearHighlight();
+
+    if(begin >= end || begin > m_StringSize || end > m_StringSize)
+        return;
+
+    for(size_type i = begin; i < end; i++) {
+        sf::Vector2 startPos = FindCharacterPos(i), endPos = FindCharacterPos(i + 1);
+
+        if(startPos.y != endPos.y)
+            continue;
+
+        sf::RectangleShape shape({endPos.x - startPos.x, TEXT_SIZE});
+        shape.setPosition(startPos);
+        shape.setFillColor(sf::Color::Blue);
+
+        m_Highlights.push_back(shape);
+    }
 }

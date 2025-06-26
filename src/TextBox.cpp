@@ -5,7 +5,7 @@ constexpr uint64_t TEXT_SIZE = 30;
 constexpr uint64_t TAB_WIDTH = 4;
 
 TextBox::TextBox(sf::Vector2f pos, sf::Vector2f size) : 
-                    m_Index(0), m_String("Hello, World!"),
+                    m_Index(0), m_SelectIndex(std::string::npos), m_String("Hell\no, World!"),
                     m_Cursor({ 2.0f, TEXT_SIZE }), m_Text(), 
                     m_Background(size), m_LineHighlight({size.x, TEXT_SIZE}),
                     m_Scroll(0.f, 0.f), m_ShouldUpdateString(true), m_ShouldUpdateView(true) {
@@ -31,8 +31,8 @@ void TextBox::Draw(sf::RenderWindow& window) const {
     window.setView(textBoxView);
 
     window.draw(m_Background);
-    m_Cursor.Draw(window);
     m_Text.Draw(window); 
+    m_Cursor.Draw(window);
     window.draw(m_LineHighlight);
 
     window.setView(oldView); 
@@ -46,6 +46,11 @@ void TextBox::Update(double deltaTime) noexcept {
     
     UpdateString();
     UpdateView();
+}
+
+void TextBox::ClampCursor() noexcept {
+    if(m_Index > m_String.size())
+        m_Index = m_String.size();
 }
 
 void TextBox::OnTransformChanged() {
@@ -66,11 +71,16 @@ void TextBox::UpdateString() {
 void TextBox::UpdateView() {
     if(!m_ShouldUpdateView)
         return;
-
+    
     m_Cursor.SetPosition(m_Text.FindCharacterPos(m_Index));
     m_LineHighlight.setPosition({m_Position.x + m_Scroll.x, m_Text.FindCharacterPos(m_Index).y});
     m_Background.setPosition(m_Position + m_Scroll);
 
+    if(m_SelectIndex != std::string::npos)
+        m_Text.Highlight(std::min(m_SelectIndex, m_Index), std::max(m_SelectIndex, m_Index));
+    else
+        m_Text.ClearHighlight();
+    
     m_ShouldUpdateView = false;
 }
 
@@ -93,6 +103,8 @@ char TextBox::GetLeftChar() const noexcept {
 }
 
 void TextBox::Add(char c) noexcept {
+    ClampCursor(); ClearSelection();
+
     m_String.insert(m_String.begin() + m_Index, c);
     MoveRight();
 
@@ -100,13 +112,23 @@ void TextBox::Add(char c) noexcept {
 }
 
 void TextBox::Add(const std::string& str) noexcept {
-    m_String.insert(m_Index, str);
-    MoveTo(m_Index + str.size());
+    for(const char c : str)
+        Add(c);
+}
 
-    m_ShouldUpdateString = true;
+void TextBox::AddTab() noexcept {
+    for(size_t i = 0; i < TAB_WIDTH; i++)
+        Add(' ');
 }
 
 bool TextBox::Remove() noexcept {
+    // TODO:    This is already being checked in ClearSelection.
+    //          Maybe a better pattern?
+    if(IsSelecting()) {
+        ClearSelection();
+        return true;
+    }
+
     // Do nothing if the cursor is on the first character.
     if (m_Index == 0)
         return false;
@@ -116,6 +138,11 @@ bool TextBox::Remove() noexcept {
 }
 
 bool TextBox::SkipRemove() noexcept {
+    if(IsSelecting()) {
+        ClearSelection();
+        return true;
+    }
+
     // Save the current cursor position, skip to the left,
     // and delete all characters in between.
     size_t initialIndex = m_Index;
@@ -123,6 +150,8 @@ bool TextBox::SkipRemove() noexcept {
 }
 
 bool TextBox::RemoveRange(size_t begin, size_t end) noexcept {
+    ClampCursor(); 
+
     // Ensure the range is actually valid. 
     if (begin > end || begin > m_String.size() || end > m_String.size())
         return false;
@@ -133,11 +162,6 @@ bool TextBox::RemoveRange(size_t begin, size_t end) noexcept {
     m_ShouldUpdateString = true;
 
     return true;
-}
-
-void TextBox::AddTab() noexcept {
-    for(size_t i = 0; i < TAB_WIDTH; i++)
-        Add(' ');
 }
 
 bool TextBox::RemoveTab() noexcept {
@@ -151,6 +175,37 @@ bool TextBox::RemoveTab() noexcept {
     return true;
 }
 
+bool TextBox::IsSelecting() const noexcept {
+    return m_SelectIndex != std::string::npos;
+}
+
+void TextBox::StartSelecting() noexcept {
+    ClampCursor(); m_SelectIndex = m_Index;
+    m_ShouldUpdateView = true;
+}
+
+void TextBox::StopSelecting() noexcept {
+    m_SelectIndex = std::string::npos;
+    m_ShouldUpdateView = true;
+}
+
+void TextBox::ClearSelection() noexcept {
+    if(!IsSelecting())
+        return;
+
+    // TODO: I use this in 3 places, maybe make it a function?
+    RemoveRange(std::min(m_SelectIndex, m_Index), std::max(m_SelectIndex, m_Index));
+    StopSelecting();
+}
+
+// TODO: Use std::optional<std::string>.
+std::string TextBox::GetSelection() const noexcept {
+    if(!IsSelecting())
+        return "";
+
+    return m_String.substr(std::min(m_SelectIndex, m_Index), std::max(m_SelectIndex, m_Index));
+}
+
 bool TextBox::MoveTo(size_t index) noexcept {
     if (index > m_String.size())
         return false;
@@ -159,6 +214,7 @@ bool TextBox::MoveTo(size_t index) noexcept {
     return true;
 }
 
+// TODO: Fix off-by-one bug when moving up to first line. 
 bool TextBox::MoveUp() noexcept {
     // If we're on the first line, we can't move up.
     if (OnFirstLine())
@@ -168,6 +224,8 @@ bool TextBox::MoveUp() noexcept {
     // to the beginning of the line.
     size_t lowerLineStartDistance = GetDistanceFromLineStart();
     MoveTo(m_Index - lowerLineStartDistance);
+
+    std::cout << m_Index << std::endl;
 
     // Do the same for the upper line.
     size_t upperLineStartDistance = GetDistanceFromLineStart();
@@ -191,7 +249,7 @@ bool TextBox::MoveDown() noexcept {
     size_t firstLineStartDistance = GetDistanceFromLineStart();
 
     // Move the cursor to the end of the line. 
-    MoveEndLine();
+    MoveEnd();
 
     // Now, get the distance to the end of the line.
     // As we are at the start, this gets the characters in the line.
@@ -223,15 +281,15 @@ bool TextBox::MoveRight() noexcept {
     return true;
 }
 
-void TextBox::MoveBegin() noexcept {
+void TextBox::MoveTop() noexcept {
     MoveTo(0);
 }
 
-void TextBox::MoveEnd() noexcept {
+void TextBox::MoveBottom() noexcept {
     MoveTo(m_String.size());
 }
 
-void TextBox::MoveStartLine() noexcept {
+void TextBox::MoveStart() noexcept {
     char leftChar = GetLeftChar();
     if (leftChar == '\n' || leftChar == '\0')
         return;
@@ -240,7 +298,7 @@ void TextBox::MoveStartLine() noexcept {
     MoveTo((nextLeftNewline != std::string::npos) ? nextLeftNewline + 1 : 0);
 }
 
-void TextBox::MoveEndLine() noexcept {
+void TextBox::MoveEnd() noexcept {
     char rightChar = GetRightChar();
     if (rightChar == '\n' || rightChar == '\0')
         return; 
@@ -286,7 +344,7 @@ bool TextBox::SkipLeft() noexcept {
             MoveRight();
     }
     else
-        MoveBegin(); // We're on the first line, move to the start.
+        MoveTop(); // We're on the first line, move to the start.
 
     return true;
 }
@@ -327,7 +385,7 @@ bool TextBox::SkipRight() noexcept {
             MoveLeft();
     }
     else
-        MoveEnd(); // We're on the last line, move to the end. 
+        MoveBottom(); // We're on the last line, move to the end. 
 
     return true;
 }
@@ -386,7 +444,7 @@ size_t TextBox::FindFirstRight(char toFind) const {
 
 size_t TextBox::GetDistanceFromLineStart() const noexcept {
     size_t nextLeftNewline = FindFirstLeft('\n');
-    return (nextLeftNewline == std::string::npos) ? m_Index + 1 : m_Index - nextLeftNewline;
+    return (nextLeftNewline == std::string::npos) ? m_Index : m_Index - nextLeftNewline;
 }
 
 size_t TextBox::GetDistanceToLineEnd() const noexcept {
