@@ -3,6 +3,7 @@
 #ifndef TEXT_H
 #define TEXT_H
 
+#include <unordered_map>
 #include <string>
 #include <vector>
 
@@ -30,7 +31,8 @@ private:
     
     size_type m_StringSize;
     sf::Text m_Text; 
-    std::vector<sf::RectangleShape> m_Highlights;
+    std::unordered_map<size_type, sf::Vector2f> m_CharacterPosCache;
+    std::unordered_map<size_type, sf::RectangleShape> m_HighlightCache;
 };
 
 #endif

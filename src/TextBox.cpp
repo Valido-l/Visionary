@@ -1,11 +1,10 @@
 #include "TextBox.h"
-#include <iostream>
 
 constexpr uint64_t TEXT_SIZE = 30;
 constexpr uint64_t TAB_WIDTH = 4;
 
 TextBox::TextBox(sf::Vector2f pos, sf::Vector2f size) : 
-                    m_Index(0), m_SelectIndex(std::string::npos), m_String("Hell\no, World!"),
+                    m_Index(0), m_SelectIndex(std::string::npos), m_String("Hello, World!"),
                     m_Cursor({ 2.0f, TEXT_SIZE }), m_Text(), 
                     m_Background(size), m_LineHighlight({size.x, TEXT_SIZE}),
                     m_Scroll(0.f, 0.f), m_ShouldUpdateString(true), m_ShouldUpdateView(true) {
@@ -39,8 +38,6 @@ void TextBox::Draw(sf::RenderWindow& window) const {
 }
 
 void TextBox::Update(double deltaTime) noexcept {
-    m_Text.SetString(m_String);
-    
     m_Cursor.Update(deltaTime);
     m_Text.Update(deltaTime); 
     
@@ -199,9 +196,9 @@ void TextBox::ClearSelection() noexcept {
 }
 
 // TODO: Use std::optional<std::string>.
-std::string TextBox::GetSelection() const noexcept {
+std::optional<std::string> TextBox::GetSelection() const noexcept {
     if(!IsSelecting())
-        return "";
+        return std::nullopt;
 
     return m_String.substr(std::min(m_SelectIndex, m_Index), std::max(m_SelectIndex, m_Index));
 }
@@ -224,8 +221,6 @@ bool TextBox::MoveUp() noexcept {
     // to the beginning of the line.
     size_t lowerLineStartDistance = GetDistanceFromLineStart();
     MoveTo(m_Index - lowerLineStartDistance);
-
-    std::cout << m_Index << std::endl;
 
     // Do the same for the upper line.
     size_t upperLineStartDistance = GetDistanceFromLineStart();
@@ -460,6 +455,22 @@ bool TextBox::OnLastLine() const noexcept {
     return GetRightChar() != '\n' && FindFirstRight('\n') == std::string::npos;
 }
 
-void TextBox::Paste() {
+size_t TextBox::GetLineCount() const noexcept {
+    size_t lines = 1;
+    for(const char c : m_String)
+        if(c == '\n')
+            lines++;
+
+    return lines;
+}
+
+void TextBox::Paste() noexcept {
     Add(sf::Clipboard::getString());
+}
+
+void TextBox::Copy() const noexcept {
+    auto selection = GetSelection();
+
+    if(selection.has_value())
+        sf::Clipboard::setString(selection.value());
 }

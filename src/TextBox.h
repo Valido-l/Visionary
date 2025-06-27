@@ -3,6 +3,7 @@
 #ifndef TEXT_BOX_H
 #define TEXT_BOX_H
 
+#include <optional>
 #include <functional>
 #include <string>
 
@@ -138,7 +139,7 @@ public:
      * @returns The currently selected text, or an empty string
      *          if nothing is selected.
      */
-    std::string GetSelection() const noexcept;
+    std::optional<std::string> GetSelection() const noexcept;
 
     // TODO: Add Select All and Copy functions. 
 
@@ -218,7 +219,14 @@ public:
      * 
      * @note    Removes selection. 
      */
-    void Paste();
+    void Paste() noexcept;
+
+    /**
+     * @brief   Sets the contents of the clipboard to the currently selected text.
+     * 
+     * @note    Does nothing if no text is selected.
+     */
+    void Copy() const noexcept;
 
 private:
     /**
@@ -292,6 +300,7 @@ private:
      */
     bool OnLastLine() const noexcept;
 
+    size_t GetLineCount() const noexcept;
 
     /**
      * @brief   If m_ShouldUpdateString is true, sets the string of m_Text.

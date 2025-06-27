@@ -61,17 +61,21 @@ public:
         }
 
         if (key == sf::Keyboard::Key::Home)
-            (!shiftPressed) ? m_Lines.MoveStart() : m_Lines.MoveTop();
+            (!controlPressed) ? m_Lines.MoveStart() : m_Lines.MoveTop();
         if (key == sf::Keyboard::Key::End)
-            (!shiftPressed) ? m_Lines.MoveEnd() : m_Lines.MoveBottom();
+            (!controlPressed) ? m_Lines.MoveEnd() : m_Lines.MoveBottom();
 
         if (key == sf::Keyboard::Key::Up)
             m_Lines.MoveUp();
         if (key == sf::Keyboard::Key::Down)
             m_Lines.MoveDown();
 
+        if(controlPressed && key == sf::Keyboard::Key::C)
+            m_Lines.Copy();
+
         if(controlPressed && key == sf::Keyboard::Key::V)
             m_Lines.Paste();
+
 
         if(key == sf::Keyboard::Key::LShift) {
             (!m_Lines.IsSelecting()) ? m_Lines.StartSelecting() : m_Lines.StopSelecting();
@@ -130,6 +134,10 @@ int main()
         double deltaTime = deltaClock.restart().asSeconds();
         window.handleEvents(onClose, onResize, onKeyPressed, onTextEntered);
   
+        float fps = 1.0f / clock.restart().asSeconds();
+		window.setTitle("Visionary | FPS: " + std::to_string(fps));
+
+
         editor.Update(deltaTime);
         
         window.clear();
