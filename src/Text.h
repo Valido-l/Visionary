@@ -20,7 +20,7 @@ public:
     
     void SetString(const std::string& str);
     
-    sf::Vector2f FindCharacterPos(size_t index);
+    sf::Vector2f FindCharacterPos(size_type index) const;
 
     void ClearHighlight() noexcept;
     
@@ -30,7 +30,7 @@ private:
     void OnTransformChanged() override;
     
     size_type m_StringSize;
-    sf::Text m_Text; 
+    std::vector<sf::Text> m_Text; 
     std::unordered_map<size_type, sf::Vector2f> m_CharacterPosCache;
     std::unordered_map<size_type, sf::RectangleShape> m_HighlightCache;
 };

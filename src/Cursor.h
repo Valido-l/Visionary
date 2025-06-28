@@ -17,7 +17,6 @@ public:
     }   
 
     void Update(double deltaTime) override {}
-
     
 private:
     void OnTransformChanged() override {

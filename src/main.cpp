@@ -32,6 +32,14 @@ public:
         m_Lines.Update(deltaTime);
     }
 
+    void OnMouseWheelScroll(const sf::Event::MouseWheelScrolled mouseWheelEvent) noexcept {
+        auto delta = mouseWheelEvent.delta;
+        if (delta < 0)
+            m_Lines.ScrollDown();
+        else
+            m_Lines.ScrollUp();
+    }
+
     void OnKeyPressed(const sf::Event::KeyPressed& keyPressedEvent) noexcept {
         auto key = keyPressedEvent.code;
 		bool controlPressed = keyPressedEvent.control;
@@ -121,6 +129,10 @@ int main()
         editor.SetSize(size);
 	};
 
+    const auto onMouseWheelScroll = [&window, &editor](const sf::Event::MouseWheelScrolled& mouseWheelEvent) {
+        editor.OnMouseWheelScroll(mouseWheelEvent);
+    };
+
     const auto onKeyPressed = [&editor](const sf::Event::KeyPressed& keyPressedEvent) {
 		editor.OnKeyPressed(keyPressedEvent);
     };
@@ -132,11 +144,10 @@ int main()
     while (window.isOpen())
     {
         double deltaTime = deltaClock.restart().asSeconds();
-        window.handleEvents(onClose, onResize, onKeyPressed, onTextEntered);
+        window.handleEvents(onClose, onResize, onMouseWheelScroll, onKeyPressed, onTextEntered);
   
         float fps = 1.0f / clock.restart().asSeconds();
 		window.setTitle("Visionary | FPS: " + std::to_string(fps));
-
 
         editor.Update(deltaTime);
         

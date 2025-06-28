@@ -24,8 +24,9 @@ void TextBox::Draw(sf::RenderWindow& window) const {
     const auto oldView = window.getView();
     sf::Vector2u windowSize = window.getSize();                
 
-    sf::View textBoxView(m_Size / 2.0f + m_Scroll, m_Size);
+    sf::View textBoxView(m_Size / 2.0f, m_Size);
     textBoxView.setViewport({{m_Position.x / windowSize.x, m_Position.y / windowSize.y}, {m_Size.x / windowSize.x, m_Size.y / windowSize.y}});
+    textBoxView.move(m_Position);
 
     window.setView(textBoxView);
 
@@ -51,8 +52,8 @@ void TextBox::ClampCursor() noexcept {
 }
 
 void TextBox::OnTransformChanged() {
-    m_Text.SetPosition(m_Position);
-    m_Background.setPosition(m_Position + m_Scroll);
+    m_Text.SetPosition(m_Position + m_Scroll);
+    m_Background.setPosition(m_Position);
 
     m_Background.setSize(m_Size);
     m_LineHighlight.setSize({m_Size.x, m_LineHighlight.getSize().y});
@@ -62,16 +63,17 @@ void TextBox::UpdateString() {
     if(!m_ShouldUpdateString)
         return;
 
-    m_Text.SetString(m_String); m_ShouldUpdateString = false;
+    m_Text.SetString(static_cast<std::string>(m_String)); m_ShouldUpdateString = false;
 }
 
 void TextBox::UpdateView() {
     if(!m_ShouldUpdateView)
         return;
     
+    m_Text.SetPosition(m_Position + m_Scroll);
     m_Cursor.SetPosition(m_Text.FindCharacterPos(m_Index));
-    m_LineHighlight.setPosition({m_Position.x + m_Scroll.x, m_Text.FindCharacterPos(m_Index).y});
-    m_Background.setPosition(m_Position + m_Scroll);
+    m_LineHighlight.setPosition({m_Position.x, m_Text.FindCharacterPos(m_Index).y});
+    m_Background.setPosition(m_Position);
 
     if(m_SelectIndex != std::string::npos)
         m_Text.Highlight(std::min(m_SelectIndex, m_Index), std::max(m_SelectIndex, m_Index));
@@ -153,7 +155,7 @@ bool TextBox::RemoveRange(size_t begin, size_t end) noexcept {
     if (begin > end || begin > m_String.size() || end > m_String.size())
         return false;
 
-    m_String.erase(m_String.begin() + begin, m_String.begin() + end);
+    m_String.erase(begin, end);
     MoveTo(begin);
 
     m_ShouldUpdateString = true;
@@ -302,6 +304,25 @@ void TextBox::MoveEnd() noexcept {
     MoveTo((nextRightNewline != std::string::npos) ? nextRightNewline : m_String.size());
 }
 
+void TextBox::ScrollUp() noexcept {
+    if (m_Scroll.y >= 0)
+        m_Scroll = {m_Scroll.x, 0};
+    else
+        m_Scroll += {0, static_cast<float>(TEXT_SIZE)};
+
+    m_ShouldUpdateView = true;
+}
+
+void TextBox::ScrollDown() noexcept {
+    sf::Vector2f lastCharPos = m_Text.FindCharacterPos(std::string::npos);
+    if (m_Scroll.y <= -m_Size.y - lastCharPos.y)
+        m_Scroll = { m_Scroll.x, -m_Size.y - lastCharPos.y };
+    else
+        m_Scroll -= {0, static_cast<float>(TEXT_SIZE)};
+
+    m_ShouldUpdateView = true;
+}
+
 bool TextBox::SkipLeft() noexcept {
     // We cannot skip if we're at the start.
     if (m_Index == 0)
@@ -329,7 +350,6 @@ bool TextBox::SkipLeft() noexcept {
                         (isalnum(leftChar)) ? std::max(nextLeftSpace, nextLeftPunct) :
                         (ispunct(leftChar)) ? std::max(nextLeftSpace, nextLeftAlnum) :
                                                std::string::npos;
-
     if (foundIndex != std::string::npos) {
         MoveTo(foundIndex);
 
@@ -472,5 +492,5 @@ void TextBox::Copy() const noexcept {
     auto selection = GetSelection();
 
     if(selection.has_value())
-        sf::Clipboard::setString(selection.value());
+        sf::Clipboard::setString(static_cast<std::string>(selection.value()));
 }

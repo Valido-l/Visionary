@@ -5,7 +5,6 @@
 
 #include <optional>
 #include <functional>
-#include <string>
 
 #include "Cursor.h"
 #include "Text.h"
@@ -136,7 +135,7 @@ public:
     /**
      * @brief   Get the currently selected text.
      * 
-     * @returns The currently selected text, or an empty string
+     * @returns The currently selected text, or 'std::nullopt'
      *          if nothing is selected.
      */
     std::optional<std::string> GetSelection() const noexcept;
@@ -213,6 +212,16 @@ public:
      * @brief   Moves the cursor to the end of the line.
      */
     void MoveEnd() noexcept;
+
+    /**
+     * @brief   Moves the view up.
+     */
+    void ScrollUp() noexcept;
+
+    /**
+     * @brief   Moves the view down.
+     */
+    void ScrollDown() noexcept;
 
     /**
      * @brief   Pastes the contents of the clipboard where the cursor's current position is.
