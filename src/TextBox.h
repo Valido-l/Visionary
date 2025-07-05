@@ -35,18 +35,18 @@ public:
     /**
      * @brief   Get the character to the right of the cursor, even if selecting.
      *
-     * @returns The character to the right of the cursor or '\0'
+     * @returns The character to the right of the cursor or 'std::nullopt'
      *          if there is nothing to the right.
      */
-    char GetRightChar() const noexcept;
+    std::optional<char> GetRightChar() const noexcept;
 
     /**
      * @brief   Get the character to the left of the cursor, even if selecting.
      *
-     * @returns The character to the left of the cursor or '\0'
+     * @returns The character to the left of the cursor or 'std::nullopt'
      *          if there is nothing to the left.
      */
-    char GetLeftChar() const noexcept;
+    std::optional<char>GetLeftChar() const noexcept;
 
     /**
      * @brief   Adds a character to the right of the cursor.
@@ -104,7 +104,7 @@ public:
      * 
      * @returns True if successful, false if 0 <= begin < end <= m_Text.size() isn't upheld. 
      */
-    bool RemoveRange(size_t begin, size_t end) noexcept;
+    bool RemoveRange(size_t beginRow, size_t beginCol, size_t endRow, size_t endCol) noexcept;
 
     /**
      * @brief   Removes a tab, by removing leading spaces. 
@@ -149,7 +149,7 @@ public:
      * 
      * @returns True if the move was successful, false if the index was an invalid position.
      */
-    bool MoveTo(size_t index) noexcept;
+    bool MoveTo(size_t row, size_t col) noexcept;
 
     /**
      * @brief   Tries to move the cursor up.
@@ -255,16 +255,6 @@ private:
     size_t FindFirstLeft(const std::function<bool(char)>& pred) const;
 
     /**
-     * @brief   Finds the first instance of a character to the left of the cursor.
-     *
-     * @param c The character to find.
-     *
-     * @returns The index of the first instance, or 'std::string::npos'
-     *          if no instance was found.
-     */
-    size_t FindFirstLeft(char toFind) const;
-
-    /**
      * @brief       Scan right from the current cursor position (exclusive) until a character
      *              satisfies the supplied predicate.
      *
@@ -274,26 +264,6 @@ private:
      *              if none is found.
      */
     size_t FindFirstRight(const std::function<bool(char)>& pred) const;
-
-    /**
-     * @brief   Finds the first instance of a character to the right of the cursor.
-     *
-     * @param c The character to find.
-     *
-     * @returns The index of the first instance, or 'std::string::npos'
-     *          if no instance was found.
-     */
-    size_t FindFirstRight(char toFind) const;
-
-    /**
-     * @returns The distance of the cursor to the start of the line.
-     */
-    size_t GetDistanceFromLineStart() const noexcept;
-
-    /**
-     * @returns The disttance of the cursor to the end of the line.
-     */
-    size_t GetDistanceToLineEnd() const noexcept;
 
     /**
      * Checks if the cursor is on the first line.
@@ -309,7 +279,9 @@ private:
      */
     bool OnLastLine() const noexcept;
 
-    size_t GetLineCount() const noexcept;
+    bool OnStartLine() const noexcept;
+
+    bool OnEndLine() const noexcept;
 
     /**
      * @brief   If m_ShouldUpdateString is true, sets the string of m_Text.
@@ -331,22 +303,20 @@ private:
      */
     void OnTransformChanged() override;
 
-    /**
-     * @brief If the cursor is beyond the string's end, clamp it to the end. 
-     */
-    void ClampCursor() noexcept;
-
     Cursor m_Cursor; Text m_Text;
 
     sf::RectangleShape m_Background, m_LineHighlight;
-    size_t m_Index; // The current position of the cursor. 
-    size_t m_SelectIndex; // The position of the cursor when selection was started. No selection is indicated by 'std::string::npos'.
+    // The current position of the cursor. 
+    size_t m_Row, m_Col;
+    //size_t m_Index; 
+    //size_t m_SelectIndex; // The position of the cursor when selection was started. No selection is indicated by 'std::string::npos'.
     sf::View m_View; // The view that displays the TextBox. 
     sf::Vector2f m_Scroll; // The scroll of the TextBox. 
 
     bool m_ShouldUpdateString, m_ShouldUpdateView; // When true, the string / view will be updated. 
 
-    std::string m_String; // Content of the TextBox. 
+    std::vector<std::string> m_Content;
+    //std::string m_String; // Content of the TextBox. 
 };
 
 

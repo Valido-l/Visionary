@@ -9,30 +9,26 @@
 
 #include "Drawable.hpp"
 
-using size_type = std::string::size_type;
-
 class Text : public Drawable {
 public:
-    Text(const std::string& str = "", sf::Vector2f pos = {0, 0});
+    Text(const std::vector<std::string>& strVec = { "" }, sf::Vector2f pos = { 0, 0 });
 
     void Draw(sf::RenderWindow& window) const override;
     void Update(double deltaTime) override;
     
-    void SetString(const std::string& str);
+    void SetString(const std::vector<std::string>& strVec);
     
-    sf::Vector2f FindCharacterPos(size_type index) const;
+    sf::Vector2f FindCharacterPos(size_t row, size_t col) const;
 
     void ClearHighlight() noexcept;
     
-    void Highlight(size_type begin, size_type end) noexcept;
+    void Highlight(size_t begin, size_t end) noexcept;
 private:
 
     void OnTransformChanged() override;
     
-    size_type m_StringSize;
     std::vector<sf::Text> m_Text; 
-    std::unordered_map<size_type, sf::Vector2f> m_CharacterPosCache;
-    std::unordered_map<size_type, sf::RectangleShape> m_HighlightCache;
+    std::unordered_map<size_t, sf::RectangleShape> m_HighlightCache;
 };
 
 #endif
