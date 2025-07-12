@@ -1,12 +1,10 @@
 #pragma once
 
-#ifndef TEXT_H
-#define TEXT_H
-
 #include <unordered_map>
 #include <string>
 #include <vector>
 
+#include "BufferPos.hpp"
 #include "Drawable.hpp"
 
 class Text : public Drawable {
@@ -18,17 +16,15 @@ public:
     
     void SetString(const std::vector<std::string>& strVec);
     
-    sf::Vector2f FindCharacterPos(size_t row, size_t col) const;
+    sf::Vector2f FindCharacterPos(BufferPos pos) const;
 
     void ClearHighlight() noexcept;
     
-    void Highlight(size_t begin, size_t end) noexcept;
+    void Highlight(BufferPos begin, BufferPos end) noexcept;
 private:
 
     void OnTransformChanged() override;
     
     std::vector<sf::Text> m_Text; 
-    std::unordered_map<size_t, sf::RectangleShape> m_HighlightCache;
+    std::vector<sf::RectangleShape> m_HighlightVec;
 };
-
-#endif

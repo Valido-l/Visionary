@@ -4,10 +4,10 @@ constexpr uint64_t TEXT_SIZE = 30;
 constexpr uint64_t TAB_WIDTH = 4;
 
 TextBox::TextBox(sf::Vector2f pos, sf::Vector2f size) : 
-                    m_Row(0), m_Col(0), m_Content({"Hello, World!"}),
-                    m_Cursor({ 2.0f, TEXT_SIZE }), m_Text(), 
-                    m_Background(size), m_LineHighlight({size.x, TEXT_SIZE}),
-                    m_Scroll(0.f, 0.f), m_ShouldUpdateString(true), m_ShouldUpdateView(true) {
+                    m_Content({"Hello, World!"}), m_SelectPos(BufferPos::NPos()),
+                    m_Cursor(this, { 2.0f, TEXT_SIZE }), m_Text(), 
+                    m_Background(size), m_LineHighlight({size.x, TEXT_SIZE}), m_Scroll(0.f, 0.f), 
+                    m_ShouldUpdateString(true), m_ShouldUpdateView(true), m_ShouldUpdateScroll(true) {
 
     SetPosition(pos); SetSize(size);
 
@@ -26,7 +26,7 @@ void TextBox::Draw(sf::RenderWindow& window) const {
 
     sf::View textBoxView(m_Size / 2.0f, m_Size);
     textBoxView.setViewport({{m_Position.x / windowSize.x, m_Position.y / windowSize.y}, {m_Size.x / windowSize.x, m_Size.y / windowSize.y}});
-    textBoxView.move(m_Position);
+    textBoxView.move(m_Position + m_Scroll);
 
     window.setView(textBoxView);
 
@@ -44,14 +44,16 @@ void TextBox::Update(double deltaTime) noexcept {
     
     UpdateString();
     UpdateView();
+    UpdateScroll();
 }
 
 void TextBox::OnTransformChanged() {
-    m_Text.SetPosition(m_Position + m_Scroll);
-    m_Background.setPosition(m_Position);
+    m_Text.SetPosition(m_Position);
 
     m_Background.setSize(m_Size);
     m_LineHighlight.setSize({m_Size.x, m_LineHighlight.getSize().y});
+
+    m_ShouldUpdateView = true; m_ShouldUpdateScroll = true;
 }
 
 void TextBox::UpdateString() {
@@ -65,63 +67,140 @@ void TextBox::UpdateString() {
 void TextBox::UpdateView() {
     if(!m_ShouldUpdateView)
         return;
-    
-    m_Text.SetPosition(m_Position + m_Scroll);
-
-    sf::Vector2f newCursorPos = m_Text.FindCharacterPos(m_Row, m_Col);
+   
+    sf::Vector2f newCursorPos = m_Text.FindCharacterPos(m_Cursor.Current());
     m_Cursor.SetPosition(newCursorPos);
-    m_LineHighlight.setPosition({m_Position.x, newCursorPos.y});
-    m_Background.setPosition(m_Position);
 
-    //if(m_SelectIndex != std::string::npos)
-    //    m_Text.Highlight(std::min(m_SelectIndex, m_Index), std::max(m_SelectIndex, m_Index));
-    //else
-    //    m_Text.ClearHighlight();
+    // Only ensure the cursor's visibility if a scroll update isn't already queued.
+    // This prevents the cursor visibility from overriding the scroll update. 
+    if(!m_ShouldUpdateScroll)
+        EnsureCursorVisibility();
+
+    // Prevent the background and highlight from going out of frame.  
+    m_LineHighlight.setPosition({m_Position.x + m_Scroll.x, newCursorPos.y});
+    m_Background.setPosition(m_Position + m_Scroll); 
+
+    if(IsSelecting())
+        m_Text.Highlight(std::min(m_SelectPos, GetBufferPos()), std::max(m_SelectPos, GetBufferPos()));
+    else
+        m_Text.ClearHighlight(); // Prevent highlight from drawing after we've stopped selecting. 
     
     m_ShouldUpdateView = false;
 }
 
-std::optional<char> TextBox::GetRightChar() const noexcept {
-    // We're on the last position, nothing is to the right. 
-    if (OnLastLine() && OnEndLine())
-        return std::nullopt;
+void TextBox::UpdateScroll() {
+    if (!m_ShouldUpdateScroll)
+        return;
 
-    return m_Content.at(m_Col).at(m_Row);
+    // We only care about the background when updating.
+    // The view itself is moved after it is created in Draw().
+    m_Background.setPosition(m_Position + m_Scroll);
+
+    m_ShouldUpdateScroll = false;
 }
 
-std::optional<char>  TextBox::GetLeftChar() const noexcept {
-    // We're on the first position, nothing is to the left.
-    if (OnFirstLine() && OnStartLine())
-        return std::nullopt;
+void TextBox::ScrollUp() noexcept {
+    if (m_Scroll.y > TEXT_SIZE)
+        m_Scroll.y -= TEXT_SIZE;
+    else
+        m_Scroll.y = 0;
 
-    // Return the last character of the previous line. 
-    if (OnStartLine()) {
-        return m_Content.at(m_Col - 1).back();
+    m_ShouldUpdateScroll = true;
+}
+
+void TextBox::ScrollDown() noexcept {
+    float limit = TEXT_SIZE * (GetLineCount() - 1);
+    if (m_Scroll.y < limit)
+        m_Scroll.y += TEXT_SIZE;
+    else
+        m_Scroll.y = limit;
+
+    m_ShouldUpdateScroll = true;
+}
+
+void TextBox::EnsureCursorVisibility() noexcept {
+    auto [cursorX, cursorY] = m_Cursor.GetPosition();
+    auto [cursorWidth, cursorHeight] = m_Cursor.GetSize();
+    auto [textBoxX, textBoxY] = m_Position;
+    auto [textBoxWidth, textBoxHeight] = m_Size;
+    auto& [scrollX, scrollY] = m_Scroll;
+
+    if (cursorY + cursorHeight - textBoxHeight > scrollY) {
+        scrollY = cursorY - textBoxHeight + cursorHeight;
+    }
+    if (cursorY - textBoxY < scrollY) {
+        scrollY = cursorY - textBoxY;
     }
 
-    return m_Content.at(m_Col).at(m_Row);
+    if (cursorX + cursorWidth - textBoxWidth > scrollX) {
+        scrollX = cursorX + cursorWidth - textBoxWidth;
+    }
+    if (cursorX - textBoxX < scrollX) {
+        scrollX = cursorX - textBoxX;
+    }
+}
+
+std::optional<std::string> TextBox::Line(size_t row) const noexcept {
+    if (row >= m_Content.size())
+        return std::nullopt;
+
+    return m_Content.at(row);
+}
+
+BufferPos TextBox::GetBufferPos() const noexcept {
+    return m_Cursor.Current();
+}
+
+
+size_t TextBox::GetLineCount() const noexcept {
+    return m_Content.size();
+}
+
+std::optional<char> TextBox::GetCharAt(const BufferPos& pos) const noexcept {
+    auto [row, col] = pos;
+
+    // Make sure the position is within bounds.
+    // Check if the row isn't bigger than lineCount
+    // and the column isn't bigger than the line's size.
+    if (row >= GetLineCount() || col >= m_Content.at(row).size())
+        return std::nullopt;
+
+    return m_Content.at(row).at(col);
+}
+
+std::optional<char> TextBox::GetRightChar() const noexcept {
+    return GetCharAt(GetBufferPos());
+}
+
+std::optional<char> TextBox::GetLeftChar() const noexcept {
+    return GetCharAt(m_Cursor.Prev());
 }
 
 void TextBox::Add(char c) noexcept {
     ClearSelection();
 
     m_ShouldUpdateString = true;
-    auto& line = m_Content[m_Col];
+    auto [row, col] = GetBufferPos();
+    auto& line = m_Content[row];
 
+    // Insert an implicit newline.
     if (c == '\n') {
-        std::string remainder = std::string(line.begin() + m_Row, line.end());
-        line.erase(line.begin() + m_Row, line.end());
+        // 1. Split the line at the cursor's position. 
+        // 3. Insert a new line and append the tail.
+        // 4. Move to the start of this new line. 
+        std::string tail = std::string(line.begin() + col, line.end());
+        line.erase(line.begin() + col, line.end()); // Erase the tail, so it isn't duplicated.
 
-        m_Content.insert(m_Content.begin() + m_Col + 1, {remainder});
+        m_Content.insert(m_Content.begin() + row + 1, {tail});
 
-        MoveTo(0, m_Col + 1);
+        MoveTo({ row + 1, 0 });
 
         return;
     }
 
-    line.insert(line.begin() + m_Row, c);
+    // Insert a character normally. 
+    line.insert(line.begin() + col, c);
     MoveRight();
-
 }
 
 void TextBox::Add(const std::string& str) noexcept {
@@ -135,76 +214,72 @@ void TextBox::AddTab() noexcept {
 }
 
 bool TextBox::Remove() noexcept {
-    // TODO:    This is already being checked in ClearSelection.
-    //          Maybe a better pattern?
-    if(IsSelecting()) {
-        ClearSelection();
+    if(ClearSelection()) {
         return true;
     }
 
     // Do nothing if the cursor is on the first character.
-    if (OnFirstLine() && OnStartLine())
+    if (m_Cursor.OnFirstPos())
         return false;
 
-    // We're on the start of the line, delete the implicit new line. 
-    if (OnStartLine())
-        return RemoveRange(m_Content[m_Col - 1].size(), m_Col - 1, m_Row, m_Col);
+    auto [row, col] = GetBufferPos();
 
+    // We're on the start of the line, delete the implicit new line. 
+    if (m_Cursor.OnStartLine())
+        return RemoveRange({ row - 1, m_Content[row - 1].size() }, { row, col });
+
+    // Delete a character normally.
     // -1 because we're deleting the character left of the cursor. 
-    return RemoveRange(m_Row - 1, m_Col, m_Row, m_Col);
+    return RemoveRange({ row, col - 1 }, { row, col });
 }
 
 bool TextBox::SkipRemove() noexcept {
-    //if(IsSelecting()) {
-    //    ClearSelection();
-    //    return true;
-    //}
+    if(ClearSelection()) {
+        return true;
+    }
 
-    //// Save the current cursor position, skip to the left,
-    //// and delete all characters in between.
-    //size_t initialIndex = m_Index;
-    //return SkipLeft() && RemoveRange(m_Index, initialIndex);
-    return true;
+    // Save the current cursor position, skip to the left,
+    // and delete all characters in between.
+    BufferPos initial = GetBufferPos();
+    return SkipLeft() && RemoveRange(GetBufferPos(), initial);
 }
 
-bool TextBox::RemoveRange(size_t beginRow, size_t beginCol, size_t endRow, size_t endCol) noexcept {
-    //ClampCursor(); 
-
+bool TextBox::RemoveRange(BufferPos begin, BufferPos end) noexcept {
     // Ensure the range is actually valid. 
-    if  (beginCol > endCol                          ||
-        (beginCol == endCol && beginRow >= endRow)  ||
-        beginCol >= m_Content.size()                ||
-        endCol >= m_Content.size()                  ||
-        beginRow > m_Content[beginCol].size()      || 
-        endRow > m_Content[endCol].size())
-            return false;
+    if (begin > m_Cursor.MaxPos() ||
+        end > m_Cursor.MaxPos() ||
+        begin > end)
+        return false;
+
+    auto [beginRow, beginCol] = begin;
+    auto [endRow, endCol] = end;
 
     // First Case: On the same line.
-    if (beginCol == endCol) {
-        auto& line = m_Content[beginCol];
-        line.erase(line.begin() + beginRow, line.begin() + endRow);
+    if (beginRow == endRow) {
+        auto& line = m_Content[beginRow];
+        line.erase(line.begin() + beginCol, line.begin() + endCol);
     }
     // Second Case: Different lines.
     else {
-        // 1. Get the remainder of the endCol line.
+        // 1. Split the endLine at endCol.
         // 2. Delete everything between (beginRow, beginCol) and (endRow, endCol).
-        // 3. Append the remainder to the beginCol line.
+        // 3. Append the tail to beginLine.
 
-        auto& beginLine = m_Content[beginCol];
-        auto& endLine = m_Content[endCol];
+        auto& beginLine = m_Content[beginRow];
+        auto& endLine = m_Content[endRow];
 
-        std::string remainder = std::string(endLine.begin() + endRow, endLine.end());
+        std::string tail = std::string(endLine.begin() + endCol, endLine.end());
 
-        endLine.erase(endLine.begin() + endRow, endLine.end());
-        beginLine.erase(beginLine.begin() + beginRow, beginLine.end());
+        endLine.erase(endLine.begin() + endCol, endLine.end());
+        beginLine.erase(beginLine.begin() + beginCol, beginLine.end());
 
-        for (size_t i = beginCol + 1; i <= endCol; i++)
-            m_Content.erase(m_Content.begin() + i);
-
-        beginLine.append(remainder);
+        // Everything in between.
+        m_Content.erase(m_Content.begin() + beginRow + 1, m_Content.begin() + endRow + 1);
+ 
+        beginLine.append(tail);
     }
 
-    MoveTo(beginRow, beginCol);
+    MoveTo(begin);
 
     m_ShouldUpdateString = true;
     return true;
@@ -222,244 +297,221 @@ bool TextBox::RemoveTab() noexcept {
 }
 
 bool TextBox::IsSelecting() const noexcept {
-    //return m_SelectIndex != std::string::npos;
-    return false;
+    return m_SelectPos != BufferPos::NPos();
 }
 
 void TextBox::StartSelecting() noexcept {
-    /*ClampCursor(); m_SelectIndex = m_Index;
-    m_ShouldUpdateView = true;*/
+    m_SelectPos = GetBufferPos();
+    m_ShouldUpdateView = true;
 }
 
 void TextBox::StopSelecting() noexcept {
-    //m_SelectIndex = std::string::npos;
-    //m_ShouldUpdateView = true;
+    m_SelectPos = BufferPos::NPos();
+    m_ShouldUpdateView = true;
 }
 
-void TextBox::ClearSelection() noexcept {
+bool TextBox::ClearSelection() noexcept {
     if(!IsSelecting())
-        return;
-
-    // TODO: I use this in 3 places, maybe make it a function?
-    //RemoveRange(std::min(m_SelectIndex, m_Index), std::max(m_SelectIndex, m_Index));
-    //StopSelecting();
-}
-
-// TODO: Use std::optional<std::string>.
-std::optional<std::string> TextBox::GetSelection() const noexcept {
-    //if(!IsSelecting())
-    //    return std::nullopt;
-
-    //return m_String.substr(std::min(m_SelectIndex, m_Index), std::max(m_SelectIndex, m_Index));
-    return std::nullopt;
-}
-
-bool TextBox::MoveTo(size_t row, size_t col) noexcept {
-    if (col >= m_Content.size() || row > m_Content[col].size())
         return false;
 
-    m_Row = row; m_Col = col;
-    m_ShouldUpdateView = true;
+    // TODO: I use this in 3 places, maybe make it a function?
+    RemoveRange(std::min(m_SelectPos, GetBufferPos()), std::max(m_SelectPos, GetBufferPos()));
+    StopSelecting();
     return true;
 }
 
-// TODO: Fix off-by-one bug when moving up to first line. 
-bool TextBox::MoveUp() noexcept {
-    // If we're on the first line, we can't move up.
-    if (OnFirstLine())
+std::optional<std::string> TextBox::GetSelection() const noexcept {
+    if(!IsSelecting())
+        return std::nullopt;
+
+
+    auto [beginRow, beginCol] = std::min(m_SelectPos, GetBufferPos());
+    auto [endRow, endCol] = std::max(m_SelectPos, GetBufferPos());
+
+    // TODO: I have this similar same line / different line pattern in 4 different places.
+    // Maybe think of a way to reduce code repetition. 
+    
+    // First Case: On the same line.
+    if (beginRow == endRow) {
+        auto& line = m_Content[beginRow];
+        return std::string(line.begin() + beginCol, line.begin() + endCol);
+    }
+    // Second Case: Different lines.
+    else {
+        // 1. Split the beginLine at beginCol and append it to ret.
+        // 2. Append everything between (beginRow, beginCol) and (endRow, endCol).
+        // 3. Split the endLine at endCol and append it to ret.
+
+        // Build the string.
+        std::string ret = "";
+        auto& beginLine = m_Content[beginRow];
+        auto& endLine = m_Content[endRow];
+
+        ret += std::string(beginLine.begin() + beginCol, beginLine.end()) + '\n';
+
+        for (size_t i = beginRow + 1; i < endRow; i++) {
+            ret += m_Content.at(i) + '\n';
+        }
+
+        ret += std::string(endLine.begin(), endLine.begin() + endCol);
+        return ret;
+    }
+}
+
+void TextBox::SelectAll() noexcept {
+    StopSelecting();
+    MoveTop();
+    StartSelecting();
+    MoveBottom();
+}
+
+bool TextBox::MoveTo(BufferPos pos) noexcept {
+    m_ShouldUpdateView = true;
+
+    // Cursor is already at the provided pos. 
+    if (pos == GetBufferPos())
         return false;
 
-   return MoveTo(std::min(m_Row, m_Content[m_Col - 1].size()), m_Col - 1);
+    auto [row, col] = pos;
+
+    // Clamp in case of invalid pos.
+    if (row >= m_Content.size()) {
+        row = m_Content.back().size(); col = m_Content.size() - 1;
+    }
+    if (col > m_Content[row].size()) {
+        col = m_Content[row].size();
+    }
+
+    return m_Cursor.MoveTo({ row, col });
+}
+
+bool TextBox::MoveUp() noexcept {
+   return MoveTo(m_Cursor.Above());
 }
 
 bool TextBox::MoveDown() noexcept {
-    // If we're on the last line, we can't move down.
-    if (OnLastLine())
-        return false;
-
-    return MoveTo(std::min(m_Row, m_Content[m_Col + 1].size()), m_Col + 1);
+    return MoveTo(m_Cursor.Below());
 }
 
 bool TextBox::MoveLeft() noexcept {
-    if (OnFirstLine() && OnStartLine())
-        return false;
-
-    if (OnStartLine())
-        return MoveTo(m_Content[m_Col - 1].size(), m_Col - 1);
-
-    return MoveTo(m_Row - 1, m_Col);
+    return MoveTo(m_Cursor.Prev());
 }
 
 bool TextBox::MoveRight() noexcept {
-    if (OnLastLine() && OnEndLine())
-        return false;
-
-    if (OnEndLine())
-        return MoveTo(0, m_Col + 1);
-
-    return MoveTo(m_Row + 1, m_Col);
+    return MoveTo(m_Cursor.Next());
 }
 
 void TextBox::MoveTop() noexcept {
-    MoveTo(0, 0);
+    MoveTo(m_Cursor.MinPos());
 }
 
 void TextBox::MoveBottom() noexcept {
-    MoveTo(m_Content.back().size(), m_Content.size() - 1);
+    MoveTo(m_Cursor.MaxPos());
 }
 
 void TextBox::MoveStart() noexcept {
-    MoveTo(0, m_Col);
+    MoveTo(m_Cursor.StartLinePos());
 }
 
 void TextBox::MoveEnd() noexcept {
-    MoveTo(m_Content[m_Col].size(), m_Col);
-}
-
-void TextBox::ScrollUp() noexcept {
-    //if (m_Scroll.y >= 0)
-    //    m_Scroll = {m_Scroll.x, 0};
-    //else
-    //    m_Scroll += {0, static_cast<float>(TEXT_SIZE)};
-
-    //m_ShouldUpdateView = true;
-}
-
-void TextBox::ScrollDown() noexcept {
- /*   sf::Vector2f lastCharPos = m_Text.FindCharacterPos(std::string::npos);
-    if (m_Scroll.y <= -m_Size.y - lastCharPos.y)
-        m_Scroll = { m_Scroll.x, -m_Size.y - lastCharPos.y };
-    else
-        m_Scroll -= {0, static_cast<float>(TEXT_SIZE)};
-
-    m_ShouldUpdateView = true;*/
+    MoveTo(m_Cursor.EndLinePos());
 }
 
 bool TextBox::SkipLeft() noexcept {
-    //// We cannot skip if we're at the start.
-    //if (m_Index == 0)
-    //    return false;
+    if (m_Cursor.OnFirstPos())
+        return false;
 
-    //char leftChar = GetLeftChar();
+    // If we're at the start of the line, just move to the left. 
+    if (m_Cursor.OnStartLine()) {
+        MoveLeft(); return true;
+    }
 
-    //// If we're on a new line, just move one to the right.
-    //if(leftChar == '\n') {
-    //    MoveLeft(); return true;
-    //}
+    char leftChar = GetLeftChar().value(); // Must have a value, as we're not on firstPos.
 
-    //// Get the closest chars of each class. 
-    //size_t nextLeftSpace = FindFirstLeft(isspace) + 1;
-    //size_t nextLeftAlnum = FindFirstLeft(isalnum) + 1;
-    //size_t nextLeftPunct = FindFirstLeft(ispunct) + 1;
-    //// +1 because we want the found character to be to the *left*, not right.
+    // Get the closest chars of each class. 
+    auto nextLeftSpace = FindFirstLeft(isspace);
+    auto nextLeftAlnum = FindFirstLeft(isalnum);
+    auto nextLeftPunct = FindFirstLeft(ispunct);
 
-    //// A char can be one of three classes.
-    //// 1. Whitespace: '\n', '\t', ' ', etc.
-    //// 2. Alphanumeric: 'A', '3', 'h', etc.
-    //// 3. Punctuation: '*', '.', '+', etc.
-    //// In any case, just skip to the closest character that isn't of the rightChar's class. 
-    //size_t foundIndex = (isspace(leftChar)) ? std::max(nextLeftAlnum, nextLeftPunct) :
-    //                    (isalnum(leftChar)) ? std::max(nextLeftSpace, nextLeftPunct) :
-    //                    (ispunct(leftChar)) ? std::max(nextLeftSpace, nextLeftAlnum) :
-    //                                           std::string::npos;
-    //if (foundIndex != std::string::npos) {
-    //    MoveTo(foundIndex);
+    // A char can be one of three classes.
+    // 1. Whitespace: '\n', '\t', ' ', etc.
+    // 2. Alphanumeric: 'A', '3', 'h', etc.
+    // 3. Punctuation: '*', '.', '+', etc.
+    // In any case, just skip to the closest character that isn't of the leftChar's class. 
+    // If one was found beyond the confines of the line, skip to the startPos. 
+    auto found =    (isspace(leftChar)) ? std::max({ nextLeftAlnum, nextLeftPunct, m_Cursor.StartLinePos() }) :
+                    (isalnum(leftChar)) ? std::max({ nextLeftSpace, nextLeftPunct, m_Cursor.StartLinePos() }) :
+                    (ispunct(leftChar)) ? std::max({ nextLeftSpace, nextLeftAlnum, m_Cursor.StartLinePos() }) :
+                    m_Cursor.MinPos();
 
-    //    // If we skipped and landed on the start of a new line,
-    //    // compensate by moving one to the right. 
-    //    if(GetRightChar() == '\n')
-    //        MoveRight();
-    //}
-    //else
-    //    MoveTop(); // We're on the first line, move to the start.
-
-    return true;
+    return MoveTo(found);
 }
 
 bool TextBox::SkipRight() noexcept {
-    //// We cannot skip if we're at the end.
-    //if (m_Index == m_String.size())
-    //   return false;
+    // We cannot skip if we're at the end.
+    if (m_Cursor.OnLastPos())
+        return false;
 
-    //char rightChar = GetRightChar();
+    // If we're at the end of the line, just move to the right. 
+    if (m_Cursor.OnEndLine()) {
+        MoveRight(); return true;
+    }
 
-    //// If we're on a new line, just move one to the right.
-    //if(rightChar == '\n') {
-    //    MoveRight(); return true;
-    //}
+    char rightChar = GetRightChar().value(); // Must have a value, as we're not on lastPos. 
 
-    //// Get the closest chars of each class. 
-    //size_t nextRightSpace = FindFirstRight(isspace);
-    //size_t nextRightAlnum = FindFirstRight(isalnum);
-    //size_t nextRightPunct = FindFirstRight(ispunct);
+    // Get the closest chars of each class. 
+    auto nextRightSpace = FindFirstRight(isspace);
+    auto nextRightAlnum = FindFirstRight(isalnum);
+    auto nextRightPunct = FindFirstRight(ispunct);
 
-    //// A char can be one of three classes.
-    //// 1. Whitespace: '\n', '\t', ' ', etc.
-    //// 2. Alphanumeric: 'A', '3', 'h', etc.
-    //// 3. Punctuation: '*', '.', '+', etc.
-    //// In any case, just skip to the closest character that isn't of the rightChar's class. 
-    //size_t foundIndex = (isspace(rightChar)) ? std::min(nextRightAlnum, nextRightPunct) :
-    //                    (isalnum(rightChar)) ? std::min(nextRightSpace, nextRightPunct) :
-    //                    (ispunct(rightChar)) ? std::min(nextRightSpace, nextRightAlnum) :
-    //                                           std::string::npos;
+    // A char can be one of three classes.
+    // 1. Whitespace: '\n', '\t', ' ', etc.
+    // 2. Alphanumeric: 'A', '3', 'h', etc.
+    // 3. Punctuation: '*', '.', '+', etc.
+    // In any case, just skip to the closest character that isn't of the rightChar's class. 
+    // If one was found beyond the confines of the line, skip to the endPos. 
+    auto found = (isspace(rightChar)) ? std::min({ nextRightAlnum, nextRightPunct, m_Cursor.EndLinePos() }) :
+                 (isalnum(rightChar)) ? std::min({ nextRightSpace, nextRightPunct, m_Cursor.EndLinePos() }) :
+                 (ispunct(rightChar)) ? std::min({ nextRightSpace, nextRightAlnum, m_Cursor.EndLinePos() }) :
+                 m_Cursor.MaxPos();
 
-    //if (foundIndex != std::string::npos) {
-    //    MoveTo(foundIndex);
-
-    //    // If we skipped and landed on the start of a new line,
-    //    // compensate by moving one to the left. 
-    //    if(GetLeftChar() == '\n')
-    //        MoveLeft();
-    //}
-    //else
-    //    MoveBottom(); // We're on the last line, move to the end. 
-
-    return true;
+    return MoveTo(found);
 }
 
-size_t TextBox::FindFirstLeft(const std::function<bool(char)>& pred) const {
-    //if (m_Index == 0 || m_Index > m_String.size())
-    //    return std::string::npos;
+BufferPos TextBox::FindFirstLeft(const std::function<bool(char)>& pred) const {
+    // Move one position back each iteration and check
+    // if the character at that position matches the predicate. 
+    for (BufferPos current = m_Cursor.Prev();; current = m_Cursor.Prev(current)) {
+        auto c = GetCharAt(current);
 
-    //for (size_t i = m_Index - 1;; --i) {
-    //    if (pred(m_String[i]))
-    //        return i;
-    //    if (i == 0) // Check the 0th index too.
-    //        break;
-    //}
+        if (!c.has_value()) // Sanity check. Make sure it has a value. 
+            continue;
 
-    return std::string::npos;
+        if (pred(c.value())) // +1, because we want to move to the *right* of the found character. 
+            return current + BufferPos(0, 1);
+
+        if (current == m_Cursor.MinPos())
+            break;
+    }
+
+    return m_Cursor.MinPos();
 }
 
-size_t TextBox::FindFirstRight(const std::function<bool(char)>& pred) const {
-    //if (m_Index >= m_String.size())
-    //    return std::string::npos;
+BufferPos TextBox::FindFirstRight(const std::function<bool(char)>& pred) const {
+    // Move one position forward each iteration and check
+    // if the character at that position matches the predicate. 
+    for (BufferPos current = m_Cursor.Next(); current < m_Cursor.MaxPos(); current = m_Cursor.Next(current)) {
+        auto c = GetCharAt(current);
 
-    //for (size_t i = m_Index + 1; i < m_String.size(); i++) {
-    //    if (pred(m_String[i]))
-    //        return i;
-    //}
+        if (!c.has_value()) // Sanity check. Make sure it has a value. 
+            continue;
 
-    return std::string::npos;
+        if (pred(c.value()))
+            return current;
+    }
+
+    return m_Cursor.MaxPos();
 }
-
-
-bool TextBox::OnFirstLine() const noexcept {
-    return m_Col == 0;
-}
-
-bool TextBox::OnLastLine() const noexcept {
-    return m_Col == m_Content.size() - 1;
-}
-
-bool TextBox::OnStartLine() const noexcept {
-    return m_Row == 0;
-}
-
-bool TextBox::OnEndLine() const noexcept {
-    return m_Row == m_Content.at(m_Col).size();
-}
-
 
 void TextBox::Paste() noexcept {
     Add(sf::Clipboard::getString());

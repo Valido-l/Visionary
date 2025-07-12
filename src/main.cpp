@@ -78,12 +78,14 @@ public:
         if (key == sf::Keyboard::Key::Down)
             m_Lines.MoveDown();
 
+        if (controlPressed && key == sf::Keyboard::Key::A)
+            m_Lines.SelectAll();
+
         if(controlPressed && key == sf::Keyboard::Key::C)
             m_Lines.Copy();
 
         if(controlPressed && key == sf::Keyboard::Key::V)
             m_Lines.Paste();
-
 
         if(key == sf::Keyboard::Key::LShift) {
             (!m_Lines.IsSelecting()) ? m_Lines.StartSelecting() : m_Lines.StopSelecting();

@@ -8,7 +8,7 @@ static sf::Text& GetTextBase() {
     static bool firstCall = true;
     static sf::Font font;
 
-    if (firstCall && !font.openFromFile("Fonts/anon.ttf"))
+    if (firstCall && !font.openFromFile("Fonts/CascadiaCode.ttf"))
         throw std::runtime_error("Cannot load the font.");
 
     static sf::Text text(font, "", TEXT_SIZE);
@@ -26,10 +26,10 @@ Text::Text(const std::vector<std::string>& strVec, sf::Vector2f pos) : m_Text() 
 }
 
 void Text::Draw(sf::RenderWindow& window) const {
-    for(const auto& [index, highlight] : m_HighlightCache)
+    for (const auto& highlight : m_HighlightVec)
         window.draw(highlight);
 
-    for(const auto& text : m_Text)
+    for (const auto& text : m_Text)
         window.draw(text);
 }
 
@@ -43,10 +43,7 @@ void Text::OnTransformChanged() {
 void Text::SetString(const std::vector<std::string>& strVec) {
     m_Text.clear();
 
-    size_t index = 0;
     for (const auto& str : strVec) {
-        if (index++ >= 100)
-            break;
         sf::Text text(GetTextBase());
         text.setString(str);
         text.setPosition({ m_Position.x, m_Position.y + TEXT_SIZE * m_Text.size() });
@@ -56,40 +53,62 @@ void Text::SetString(const std::vector<std::string>& strVec) {
     ClearHighlight();
 }
 
-sf::Vector2f Text::FindCharacterPos(size_t row, size_t col) const {
-    if (m_Text.empty() || col > m_Text.size())
+sf::Vector2f Text::FindCharacterPos(BufferPos pos) const {
+    auto [row, col] = pos;
+
+    if (m_Text.empty() || row > m_Text.size())
         return m_Position;
 
-    return m_Text.at(col).findCharacterPos(row);
+    return m_Text.at(row).findCharacterPos(col);
 }
 
 void Text::ClearHighlight() noexcept {
-    m_HighlightCache.clear();
+    m_HighlightVec.clear();
 }
 
-void Text::Highlight(size_t begin, size_t end) noexcept {
-    //if(begin >= end || begin > m_StringSize || end > m_StringSize)
-    //    return;
-    //// Clear any highlights in the cache that are outside begin-end.
-    //for (size_t i = 0; i < begin; i++)
-    //    m_HighlightCache.erase(i);
+void Text::Highlight(BufferPos begin, BufferPos end) noexcept {
+    if (begin >= end)
+        return;
 
-    //for (size_t i = end; i < m_StringSize; i++)
-    //    m_HighlightCache.erase(i);
-    //
-    //for(size_type i = begin; i < end; i++) {
-    //    if(m_HighlightCache.find(i) != m_HighlightCache.cend())
-    //        continue;
+    ClearHighlight();
 
-    //    sf::Vector2 startPos = FindCharacterPos(i), endPos = FindCharacterPos(i + 1);
+    auto [beginRow, beginCol]   = begin;
+    auto [endRow, endCol]       = end;
 
-    //    if(startPos.y != endPos.y)
-    //        continue;
+    // Helper to get a highligt for single-line positions. 
+    static const auto getHighlight = [](sf::Vector2f startPos, sf::Vector2f endPos) -> sf::RectangleShape {
+        sf::RectangleShape shape({ endPos.x - startPos.x, TEXT_SIZE });
+        shape.setPosition(startPos);
+        shape.setFillColor(sf::Color::Blue);
+        return shape;
+    };
 
-    //    sf::RectangleShape shape({endPos.x - startPos.x, TEXT_SIZE});
-    //    shape.setPosition(startPos);
-    //    shape.setFillColor(sf::Color::Blue);
+    if (beginRow == endRow) {
+        // Case 1. Same line.
+        // Only highlight the characters in between beginCol and endCol.
+        m_HighlightVec.push_back(getHighlight(FindCharacterPos(begin), FindCharacterPos(end)));
+    }
+    else {
+        // Case 2. Different lines.
+        // 1. Highlight from beginCol to the end of the beginLine.
+        // 2. Highlight from the beginning of the endLine to endCol. 
+        // 3. Highlight everything inbetween beginRow + 1 and endRow - 1.
 
-    //    m_HighlightCache[i] = shape;
-    //}
+        // 1. 
+        // We use invalidIndex, as any out-of-bounds index gets the
+        // position of the last character in the line. 
+        m_HighlightVec.push_back(getHighlight(FindCharacterPos(begin),
+                                              FindCharacterPos({begin.m_Row, BufferPos::invalidIndex })));
+
+        // 2.
+        m_HighlightVec.push_back(getHighlight(FindCharacterPos({end.m_Row, 0}),
+                                              FindCharacterPos(end)));
+
+        // 3. 
+        for (size_t i = beginRow + 1; i < endRow; i++) {
+            m_HighlightVec.push_back(getHighlight(FindCharacterPos({i, 0}),
+                                                  FindCharacterPos({i, BufferPos::invalidIndex})));
+        }
+
+    }
 }
