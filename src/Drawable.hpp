@@ -1,8 +1,5 @@
 #pragma once
 
-#ifndef DRAWABLE_H
-#define DRAWABLE_H
-
 #include <SFML/Graphics.hpp>
 
 class Drawable {
@@ -28,5 +25,3 @@ protected:
     virtual void OnTransformChanged() {}
     sf::Vector2f m_Position{}, m_Size{};
 };
-
-#endif

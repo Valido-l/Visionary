@@ -3,7 +3,7 @@
 #include "Cursor.h"
 #include "TextBox.h"
 
-Cursor::Cursor(TextBox* owner, sf::Vector2f size, BufferPos pos) noexcept : m_Owner(owner), m_BufferPos(pos), m_Shape() {
+Cursor::Cursor(TextBox* owner, sf::Vector2f size, CursorLocation pos) noexcept : m_Owner(owner), m_CursorLocation(pos), m_Shape() {
     SetPosition({ 0, 0 }); SetSize(size);
     m_Shape.setFillColor(sf::Color::White);
 }
@@ -14,65 +14,65 @@ void Cursor::Draw(sf::RenderWindow& window) const {
 
 void Cursor::Update(double deltaTime) {}
 
-BufferPos Cursor::Current() const noexcept {
-    return m_BufferPos;
+CursorLocation Cursor::Current() const noexcept {
+    return m_CursorLocation;
 }
 
-bool Cursor::MoveTo(BufferPos to) {
+bool Cursor::MoveTo(CursorLocation to) {
     if (!IsValidPos(to))
         return false;
 
-    if (m_BufferPos == to)
+    if (m_CursorLocation == to)
         return false;
 
-    m_BufferPos.m_Row = to.m_Row; m_BufferPos.m_Col = to.m_Col;
+    m_CursorLocation.m_Row = to.m_Row; m_CursorLocation.m_Col = to.m_Col;
     return true;
 }
 
-bool Cursor::IsValidPos(BufferPos pos) const noexcept {
+bool Cursor::IsValidPos(CursorLocation pos) const noexcept {
     if (!m_Owner)
         return false;
 
     return pos <= MaxPos();
 }
 
-BufferPos Cursor::Above() const noexcept {
+CursorLocation Cursor::Above() const noexcept {
     // Make sure the owner exists.
     if (!m_Owner)
         return MinPos();
 
     if (OnFirstLine())
-        return m_BufferPos;
+        return m_CursorLocation;
 
-    auto [row, col] = m_BufferPos;
+    auto [row, col] = m_CursorLocation;
 
     auto line = m_Owner->Line(row - 1);
 
     if (!line.has_value())
-        return m_BufferPos;
+        return m_CursorLocation;
 
     return { row - 1, std::min(col, line.value().size()) };
 }
 
-BufferPos Cursor::Below() const noexcept {
+CursorLocation Cursor::Below() const noexcept {
     // Make sure the owner exists.
     if (!m_Owner)
         return MinPos();
 
     if (OnLastLine())
-        return m_BufferPos;
+        return m_CursorLocation;
 
-    auto [row, col] = m_BufferPos;
+    auto [row, col] = m_CursorLocation;
 
     auto line = m_Owner->Line(row + 1);
 
     if (!line.has_value())
-        return m_BufferPos;
+        return m_CursorLocation;
 
     return { row + 1, std::min(col, line.value().size()) };
 }
 
-BufferPos Cursor::Prev(BufferPos pos) const noexcept {
+CursorLocation Cursor::Prev(CursorLocation pos) const noexcept {
     // Make sure the owner exists.
     if (!m_Owner)
         return MinPos();
@@ -81,14 +81,14 @@ BufferPos Cursor::Prev(BufferPos pos) const noexcept {
     if (!IsValidPos(pos))
         return MinPos();
 
-    // We're on the first possible position.
+    // We're on the first possible location.
     if (OnFirstPos())
         return MinPos();
 
     auto [row, col] = pos;
 
     // We're at the first char of the line.
-    // Return the position at the end of the previous line.
+    // Return the location at the end of the previous line.
     if (col == 0) {
         const auto prevLine = m_Owner->Line(row - 1);
 
@@ -98,15 +98,15 @@ BufferPos Cursor::Prev(BufferPos pos) const noexcept {
         return { row - 1, prevLine.value().size() };
     }
 
-    // Just return the position one char to the left.
+    // Just return the location one char to the left.
     return { row, col - 1};
 }
 
-BufferPos Cursor::Prev() const noexcept {
-    return Prev(m_BufferPos);
+CursorLocation Cursor::Prev() const noexcept {
+    return Prev(m_CursorLocation);
 }
 
-BufferPos Cursor::Next(BufferPos pos) const noexcept {
+CursorLocation Cursor::Next(CursorLocation pos) const noexcept {
     // Make sure the owner exists.
     if (!m_Owner)
         return MaxPos();
@@ -115,7 +115,7 @@ BufferPos Cursor::Next(BufferPos pos) const noexcept {
     if (!IsValidPos(pos))
         return MaxPos();
 
-    // We're on the last possible position.
+    // We're on the last possible location.
     if (OnLastPos())
         return MaxPos();
 
@@ -127,7 +127,7 @@ BufferPos Cursor::Next(BufferPos pos) const noexcept {
         return MaxPos();
 
     // We're at the first char of the line.
-    // Return the position at the start of the next line.
+    // Return the location at the start of the next line.
     if (col == currentLine.value().size()) {
         const auto nextLine = m_Owner->Line(row + 1);
 
@@ -137,12 +137,12 @@ BufferPos Cursor::Next(BufferPos pos) const noexcept {
         return { row + 1, 0 };
     }
 
-    // Just return the position one char to the right.
+    // Just return the location one char to the right.
     return { row, col + 1 };
 }
 
-BufferPos Cursor::Next() const noexcept {
-    return Next(m_BufferPos);
+CursorLocation Cursor::Next() const noexcept {
+    return Next(m_CursorLocation);
 }
 
 void Cursor::OnTransformChanged() {
@@ -150,11 +150,11 @@ void Cursor::OnTransformChanged() {
     m_Shape.setSize(m_Size);
 }
 
-BufferPos Cursor::MinPos() const noexcept {
+CursorLocation Cursor::MinPos() const noexcept {
     return { 0, 0 };
 }
 
-BufferPos Cursor::MaxPos() const noexcept {
+CursorLocation Cursor::MaxPos() const noexcept {
     if (!m_Owner)
         return MinPos();
 
@@ -167,19 +167,19 @@ BufferPos Cursor::MaxPos() const noexcept {
     return { lineCount, lastLine.value().size() };
 }
 
-BufferPos Cursor::StartLinePos() const noexcept {
+CursorLocation Cursor::StartLinePos() const noexcept {
     if (!m_Owner)
         return MinPos();
 
-    size_t row = m_BufferPos.m_Row;
+    size_t row = m_CursorLocation.m_Row;
     return { row, 0 };
 }
 
-BufferPos Cursor::EndLinePos() const noexcept {
+CursorLocation Cursor::EndLinePos() const noexcept {
     if (!m_Owner)
         return MinPos();
 
-    size_t row = m_BufferPos.m_Row;
+    size_t row = m_CursorLocation.m_Row;
     auto lastLine = m_Owner->Line(row);
 
     if (!lastLine.has_value())
@@ -189,19 +189,19 @@ BufferPos Cursor::EndLinePos() const noexcept {
 }
 
 bool Cursor::OnFirstLine() const noexcept {
-    return m_BufferPos.m_Row == 0;
+    return m_CursorLocation.m_Row == 0;
 }
 
 bool Cursor::OnLastLine() const noexcept {
-    return m_BufferPos.m_Row == MaxPos().m_Row;
+    return m_CursorLocation.m_Row == MaxPos().m_Row;
 }
 
 bool Cursor::OnStartLine() const noexcept {
-    return m_BufferPos.m_Col == 0;
+    return m_CursorLocation.m_Col == 0;
 }
 
 bool Cursor::OnEndLine() const noexcept {
-    return m_BufferPos.m_Col == EndLinePos().m_Col;
+    return m_CursorLocation.m_Col == EndLinePos().m_Col;
 }
 
 bool Cursor::OnFirstPos() const noexcept {

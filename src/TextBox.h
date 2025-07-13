@@ -6,8 +6,21 @@
 #include "Cursor.h"
 #include "Text.h"
 
+/**
+ *  @brief  Class that implements various ways of manipulating
+ *          and moving through a buffer.
+ *
+ *          Also handles drawing the contents of the buffer, among
+ *          various other things.
+ */
 class TextBox : public Drawable {
 public:
+    /**
+     * @brief       Creates a TextBox object.
+     *
+     * @param pos   The position of the TextBox.
+     * @param size  The size of the TextBox. 
+     */
     TextBox(sf::Vector2f pos = { 0, 0 }, sf::Vector2f size = { 0, 0 });
 
     /**
@@ -27,17 +40,28 @@ public:
     /**
      * @returns The position of the cursor.
      */
-    BufferPos GetBufferPos() const noexcept;
+    CursorLocation GetCursorLocation() const noexcept;
 
     /**
-     * @brief                       Get a line at a specific row.
+     * @returns The position of the cursor.
+     */
+    sf::Vector2f GetScroll() const noexcept;
+
+    /**
+     * @brief       Get the buffer of the TextBox.
+     *
+     * @returns     A const-reference to the m_Buffer vector.
+     */
+    const std::vector<std::string>& GetBuffer() const noexcept;
+
+    /**
+     * @brief       Get a line at a specific row.
      * 
-     * @param row                   The row. 
+     * @param row   The row. 
      * 
-     * 
-     * @returns                     A const-string-reference to the line
-     *                              or 'std::nullopt' if the provided row
-     *                              is out of range. 
+     * @returns     A const-string-reference to the line
+     *              or 'std::nullopt' if the provided row
+     *              is out of range. 
      */
     std::optional<std::string> Line(size_t row) const noexcept;
 
@@ -47,16 +71,6 @@ public:
     size_t GetLineCount() const noexcept;
 
     /**
-     * @brief   Checks if a position is valid / within bounds. 
-     *
-     * @param   pos The position to check.
-     *
-     * @returns True if the position is within bounds,
-     *          false otherwise. 
-     */
-    bool IsValidPos(const BufferPos& pos) const noexcept;
-
-    /**
      * @brief   Get a character at a specific position, even if selecting.
      *
      * @param   pos The position of the character. 
@@ -64,7 +78,7 @@ public:
      * @returns The character at the provided position cursor 
                 or 'std::nullopt' if the position is invalid. 
      */
-    std::optional<char> GetCharAt(const BufferPos& pos) const noexcept;
+    std::optional<char> GetCharAt(const CursorLocation& pos) const noexcept;
 
     /**
      * @brief   Get the character to the right of the cursor, even if selecting.
@@ -137,7 +151,7 @@ public:
      *
      * @returns True if successful, false if minPos <= begin < end <= maxPos isn't upheld.
      */
-    bool RemoveRange(BufferPos begin, BufferPos end) noexcept;
+    bool RemoveRange(CursorLocation begin, CursorLocation end) noexcept;
 
     /**
      * @brief   Removes a tab, by removing leading spaces.
@@ -191,7 +205,7 @@ public:
      *
      * @returns True if the move was successful, false if the position was invalid.
      */
-    bool MoveTo(BufferPos pos) noexcept;
+    bool MoveTo(CursorLocation pos) noexcept;
 
     /**
      * @brief   Tries to move the cursor up.
@@ -303,7 +317,7 @@ private:
      * @return      Index of the first matching character, or 'm_Cursor.MinPos()'
      *              if none is found.
      */
-    BufferPos FindFirstLeft(const std::function<bool(char)>& pred) const;
+    CursorLocation FindFirstLeft(const std::function<bool(char)>& pred) const;
 
     /**
      * @brief       Scan right from the current cursor position (exclusive) until a character
@@ -314,7 +328,7 @@ private:
      * @return      Index of the first matching character, or 'CursorPos::MaxPos()'
      *              if none is found.
      */
-    BufferPos FindFirstRight(const std::function<bool(char)>& pred) const;
+    CursorLocation FindFirstRight(const std::function<bool(char)>& pred) const;
 
     /**
      * @brief   If m_ShouldUpdateString is true, sets the string of m_Text.
@@ -351,12 +365,12 @@ private:
     Text m_Text;
 
     sf::RectangleShape m_Background, m_LineHighlight;
-    BufferPos m_SelectPos; // The position of the cursor when selection was started. No selection is indicated by BufferPos::NPos().
+    CursorLocation m_SelectPos; // The position of the cursor when selection was started. No selection is indicated by CursorLocation::NPos().
     sf::View m_View; // The view that displays the TextBox. 
     sf::Vector2f m_Scroll; // The scroll of the TextBox. 
 
     // When true, the string, view or scroll will be updated. 
     bool m_ShouldUpdateString, m_ShouldUpdateView, m_ShouldUpdateScroll; 
 
-    std::vector<std::string> m_Content; // Content of the TextBox. 
+    std::vector<std::string> m_Buffer; // Buffer of the TextBox. 
 };

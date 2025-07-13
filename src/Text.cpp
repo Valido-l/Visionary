@@ -1,7 +1,10 @@
-#include "Text.h"
 #include <optional>
 
+#include "Text.h"
+#include "TextBox.h"
+
 constexpr uint64_t TEXT_SIZE = 30;
+constexpr uint64_t CHUNK_SIZE = 256;
 
 // Helper. Used to get the default text for drawing. 
 static sf::Text& GetTextBase() {
@@ -21,12 +24,12 @@ static sf::Text& GetTextBase() {
     return text;
 }
 
-Text::Text(const std::vector<std::string>& strVec, sf::Vector2f pos) : m_Text() {
-    SetString(strVec); SetPosition(pos);
+Text::Text(TextBox* owner) : m_Owner(owner), m_Text(), m_Highlights() {
+    UpdateText();
 }
 
 void Text::Draw(sf::RenderWindow& window) const {
-    for (const auto& highlight : m_HighlightVec)
+    for (const auto& highlight : m_Highlights)
         window.draw(highlight);
 
     for (const auto& text : m_Text)
@@ -40,37 +43,68 @@ void Text::OnTransformChanged() {
         m_Text[i].setPosition({ m_Position.x, m_Position.y + TEXT_SIZE * i });
 }
 
-void Text::SetString(const std::vector<std::string>& strVec) {
+void Text::UpdateText() {
+    if (!m_Owner)
+        return;
+
+    // Get the required variables to determine if the text is in frame. 
+    float viewYOffset = m_Owner->GetPosition().y + m_Owner->GetScroll().y;
+    float currentHeight = m_Size.y;
+    const auto& buffer = m_Owner->GetBuffer();
+
+    // Clearing and rebuilding the text each time UpdateText is called
+    // might seem inefficient, but we're only rebuilding at most a few 
+    // dozen or so objects, so it won't be too inefficent. 
     m_Text.clear();
 
-    for (const auto& str : strVec) {
+    for (size_t i = 0; i < buffer.size(); i++) {
+        sf::Vector2 pos = { m_Position.x, m_Position.y + TEXT_SIZE * i };
+
+        // Do not add any text that is out of frame. 
+        if (pos.y < viewYOffset - currentHeight || pos.y > viewYOffset + currentHeight)
+            continue;
+        
+        const auto& line = buffer[i];
+
         sf::Text text(GetTextBase());
-        text.setString(str);
-        text.setPosition({ m_Position.x, m_Position.y + TEXT_SIZE * m_Text.size() });
+        text.setString(line);
+        text.setPosition(pos);
         m_Text.emplace_back(text);
     }
-
-    ClearHighlight();
 }
 
-sf::Vector2f Text::FindCharacterPos(BufferPos pos) const {
+sf::Vector2f Text::FindCharacterPos(CursorLocation pos) const {
+    if (!m_Owner)
+        return m_Position;
+    
     auto [row, col] = pos;
 
-    if (m_Text.empty() || row > m_Text.size())
+    // 'Simulate' the text, because it might not actually exist yet.
+    auto line = m_Owner->Line(row);
+    if (!line.has_value())
         return m_Position;
+       
+    // Create a new text object and place it where it would be, if it existed. 
+    sf::Vector2 strPos = { m_Position.x, m_Position.y + TEXT_SIZE * row };
+    sf::Text text(GetTextBase());
+    text.setString(line.value());
+    text.setPosition(strPos);
 
-    return m_Text.at(row).findCharacterPos(col);
+    return text.findCharacterPos(col);
 }
 
 void Text::ClearHighlight() noexcept {
-    m_HighlightVec.clear();
+    m_Highlights.clear();
 }
 
-void Text::Highlight(BufferPos begin, BufferPos end) noexcept {
-    if (begin >= end)
+void Text::Highlight(CursorLocation begin, CursorLocation end) noexcept {
+    ClearHighlight();
+
+    if (!m_Owner || begin >= end)
         return;
 
-    ClearHighlight();
+    float yCenter = m_Owner->GetPosition().y + m_Owner->GetScroll().y;
+    float currentHeight = m_Size.y;
 
     auto [beginRow, beginCol]   = begin;
     auto [endRow, endCol]       = end;
@@ -86,7 +120,7 @@ void Text::Highlight(BufferPos begin, BufferPos end) noexcept {
     if (beginRow == endRow) {
         // Case 1. Same line.
         // Only highlight the characters in between beginCol and endCol.
-        m_HighlightVec.push_back(getHighlight(FindCharacterPos(begin), FindCharacterPos(end)));
+        m_Highlights.push_back(getHighlight(FindCharacterPos(begin), FindCharacterPos(end)));
     }
     else {
         // Case 2. Different lines.
@@ -97,18 +131,23 @@ void Text::Highlight(BufferPos begin, BufferPos end) noexcept {
         // 1. 
         // We use invalidIndex, as any out-of-bounds index gets the
         // position of the last character in the line. 
-        m_HighlightVec.push_back(getHighlight(FindCharacterPos(begin),
-                                              FindCharacterPos({begin.m_Row, BufferPos::invalidIndex })));
+        m_Highlights.push_back(getHighlight(FindCharacterPos(begin),
+                                              FindCharacterPos({begin.m_Row, CursorLocation::invalidIndex })));
 
         // 2.
-        m_HighlightVec.push_back(getHighlight(FindCharacterPos({end.m_Row, 0}),
+        m_Highlights.push_back(getHighlight(FindCharacterPos({end.m_Row, 0}),
                                               FindCharacterPos(end)));
 
         // 3. 
         for (size_t i = beginRow + 1; i < endRow; i++) {
-            m_HighlightVec.push_back(getHighlight(FindCharacterPos({i, 0}),
-                                                  FindCharacterPos({i, BufferPos::invalidIndex})));
-        }
+            // Make sure the highlight is in frame.
+            // TODO: What about culling 1. and 2.?
+            float highlightY = m_Position.y + TEXT_SIZE * i;
+            if (highlightY < yCenter - currentHeight || highlightY > yCenter + currentHeight)
+                continue;
 
+            m_Highlights.push_back(getHighlight(FindCharacterPos({i, 0}),
+                                                  FindCharacterPos({i, CursorLocation::invalidIndex})));
+        }
     }
 }

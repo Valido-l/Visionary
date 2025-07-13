@@ -111,8 +111,7 @@ private:
     TextBox m_Lines;
 };
 
-int main()
-{
+int main() {
     auto window = sf::RenderWindow(sf::VideoMode({Globals::windowWidth, Globals::windowHeight}), "Visionary");
     window.setFramerateLimit(144);
 
