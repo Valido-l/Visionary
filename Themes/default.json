@@ -1,0 +1,74 @@
+{
+    "cursor": {
+        "cursorColor": [
+            200,
+            200,
+            200,
+            255
+        ],
+        "cursorWidth": 2.0,
+        "outlineColor": [
+            100,
+            0,
+            0,
+            255
+        ],
+        "outlineThickness": 0.0
+    },
+    "fontName": "CascadiaCode.ttf",
+    "lineIndicator": {
+        "backgroundColor": [
+            10,
+            10,
+            10,
+            255
+        ],
+        "outlineColor": [
+            200,
+            5,
+            40,
+            255
+        ],
+        "outlineThickness": 1.0,
+        "padLeft": 25.0,
+        "padRight": 10.0,
+        "textColor": [
+            135,
+            135,
+            135,
+            255
+        ]
+    },
+    "scale": 1.0,
+    "textBox": {
+        "backgroundColor": [
+            25,
+            25,
+            25,
+            255
+        ],
+        "fontSize": 24,
+        "lineHighlightColor": [
+            70,
+            70,
+            70,
+            70
+        ],
+        "lineIndicatorPad": 20.0,
+        "lineMargin": 5.0,
+        "selectedTextColor": [
+            80,
+            165,
+            245,
+            70
+        ],
+        "textColor": [
+            180,
+            180,
+            180,
+            255
+        ]
+    },
+    "windowHeight": 600,
+    "windowWidth": 800
+}

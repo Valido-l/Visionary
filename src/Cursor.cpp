@@ -3,23 +3,30 @@
 #include "Cursor.h"
 #include "TextBox.h"
 
-Cursor::Cursor(TextBox* owner, sf::Vector2f size, CursorLocation pos) noexcept : m_Owner(owner), m_CursorLocation(pos), m_Shape() {
-    SetPosition({ 0, 0 }); SetSize(size);
-    m_Shape.setFillColor(sf::Color::White);
+Cursor::Cursor(TextBox* owner) noexcept : 
+    m_Owner(owner), m_CursorLocation({0, 0}), m_Shape() {
+    m_Shape.setFillColor(m_Theme.cursorColor);
+    m_Shape.setOutlineThickness(m_Theme.outlineThickness);
+    m_Shape.setOutlineColor(m_Theme.outlineColor);
+
+    if (!m_Owner)
+        return;
+
+    setSize({ m_Theme.cursorWidth, static_cast<float>(m_Owner->getTheme().fontSize) });
 }
 
-void Cursor::Draw(sf::RenderWindow& window) const {
-    window.draw(m_Shape);
+void Cursor::draw(sf::RenderTarget& target, sf::RenderStates states) const {
+    target.draw(m_Shape, states);
 }
 
-void Cursor::Update(double deltaTime) {}
+void Cursor::update(double deltaTime) {}
 
-CursorLocation Cursor::Current() const noexcept {
+CursorLocation Cursor::current() const noexcept {
     return m_CursorLocation;
 }
 
-bool Cursor::MoveTo(CursorLocation to) {
-    if (!IsValidPos(to))
+bool Cursor::moveTo(CursorLocation to) {
+    if (!isValidPos(to))
         return false;
 
     if (m_CursorLocation == to)
@@ -29,24 +36,24 @@ bool Cursor::MoveTo(CursorLocation to) {
     return true;
 }
 
-bool Cursor::IsValidPos(CursorLocation pos) const noexcept {
+bool Cursor::isValidPos(CursorLocation pos) const noexcept {
     if (!m_Owner)
         return false;
 
-    return pos <= MaxPos();
+    return pos <= maxPos();
 }
 
-CursorLocation Cursor::Above() const noexcept {
+CursorLocation Cursor::above() const noexcept {
     // Make sure the owner exists.
     if (!m_Owner)
-        return MinPos();
+        return minPos();
 
-    if (OnFirstLine())
+    if (onFirstLine())
         return m_CursorLocation;
 
     auto [row, col] = m_CursorLocation;
 
-    auto line = m_Owner->Line(row - 1);
+    auto line = m_Owner->line(row - 1);
 
     if (!line.has_value())
         return m_CursorLocation;
@@ -54,17 +61,17 @@ CursorLocation Cursor::Above() const noexcept {
     return { row - 1, std::min(col, line.value().size()) };
 }
 
-CursorLocation Cursor::Below() const noexcept {
+CursorLocation Cursor::below() const noexcept {
     // Make sure the owner exists.
     if (!m_Owner)
-        return MinPos();
+        return minPos();
 
-    if (OnLastLine())
+    if (onLastLine())
         return m_CursorLocation;
 
     auto [row, col] = m_CursorLocation;
 
-    auto line = m_Owner->Line(row + 1);
+    auto line = m_Owner->line(row + 1);
 
     if (!line.has_value())
         return m_CursorLocation;
@@ -72,28 +79,28 @@ CursorLocation Cursor::Below() const noexcept {
     return { row + 1, std::min(col, line.value().size()) };
 }
 
-CursorLocation Cursor::Prev(CursorLocation pos) const noexcept {
+CursorLocation Cursor::prev(CursorLocation pos) const noexcept {
     // Make sure the owner exists.
     if (!m_Owner)
-        return MinPos();
+        return minPos();
 
     // Make sure the pos is valid.
-    if (!IsValidPos(pos))
-        return MinPos();
+    if (!isValidPos(pos))
+        return minPos();
 
     // We're on the first possible location.
-    if (OnFirstPos())
-        return MinPos();
+    if (onFirstPos())
+        return minPos();
 
     auto [row, col] = pos;
 
     // We're at the first char of the line.
     // Return the location at the end of the previous line.
     if (col == 0) {
-        const auto prevLine = m_Owner->Line(row - 1);
+        const auto prevLine = m_Owner->line(row - 1);
 
         if (!prevLine.has_value()) // Sanity check. Make sure the line exists.
-            return MinPos();
+            return minPos();
 
         return { row - 1, prevLine.value().size() };
     }
@@ -102,37 +109,37 @@ CursorLocation Cursor::Prev(CursorLocation pos) const noexcept {
     return { row, col - 1};
 }
 
-CursorLocation Cursor::Prev() const noexcept {
-    return Prev(m_CursorLocation);
+CursorLocation Cursor::prev() const noexcept {
+    return prev(m_CursorLocation);
 }
 
-CursorLocation Cursor::Next(CursorLocation pos) const noexcept {
+CursorLocation Cursor::next(CursorLocation pos) const noexcept {
     // Make sure the owner exists.
     if (!m_Owner)
-        return MaxPos();
+        return maxPos();
 
     // Make sure the pos is valid.
-    if (!IsValidPos(pos))
-        return MaxPos();
+    if (!isValidPos(pos))
+        return maxPos();
 
     // We're on the last possible location.
-    if (OnLastPos())
-        return MaxPos();
+    if (onLastPos())
+        return maxPos();
 
     auto [row, col] = pos;
 
     // Check if we're on the last char of the line.
-    auto currentLine = m_Owner->Line(row);
+    auto currentLine = m_Owner->line(row);
     if (!currentLine.has_value())
-        return MaxPos();
+        return maxPos();
 
     // We're at the first char of the line.
     // Return the location at the start of the next line.
     if (col == currentLine.value().size()) {
-        const auto nextLine = m_Owner->Line(row + 1);
+        const auto nextLine = m_Owner->line(row + 1);
 
         if (!nextLine.has_value()) // Sanity check. Make sure the line exists.
-            return MaxPos();
+            return maxPos();
 
         return { row + 1, 0 };
     }
@@ -141,73 +148,73 @@ CursorLocation Cursor::Next(CursorLocation pos) const noexcept {
     return { row, col + 1 };
 }
 
-CursorLocation Cursor::Next() const noexcept {
-    return Next(m_CursorLocation);
+CursorLocation Cursor::next() const noexcept {
+    return next(m_CursorLocation);
 }
 
-void Cursor::OnTransformChanged() {
+void Cursor::onTransformChanged(sf::Vector2f oldPos, sf::Vector2f oldSize) {
     m_Shape.setPosition(m_Position);
     m_Shape.setSize(m_Size);
 }
 
-CursorLocation Cursor::MinPos() const noexcept {
+CursorLocation Cursor::minPos() const noexcept {
     return { 0, 0 };
 }
 
-CursorLocation Cursor::MaxPos() const noexcept {
+CursorLocation Cursor::maxPos() const noexcept {
     if (!m_Owner)
-        return MinPos();
+        return minPos();
 
-    size_t lineCount = m_Owner->GetLineCount() - 1;
-    auto lastLine = m_Owner->Line(lineCount);
+    size_t lineCount = m_Owner->getLineCount() - 1;
+    auto lastLine = m_Owner->line(lineCount);
 
     if (!lastLine.has_value())
-        return MinPos();
+        return minPos();
 
     return { lineCount, lastLine.value().size() };
 }
 
-CursorLocation Cursor::StartLinePos() const noexcept {
+CursorLocation Cursor::startLinePos() const noexcept {
     if (!m_Owner)
-        return MinPos();
+        return minPos();
 
     size_t row = m_CursorLocation.m_Row;
     return { row, 0 };
 }
 
-CursorLocation Cursor::EndLinePos() const noexcept {
+CursorLocation Cursor::endLinePos() const noexcept {
     if (!m_Owner)
-        return MinPos();
+        return minPos();
 
     size_t row = m_CursorLocation.m_Row;
-    auto lastLine = m_Owner->Line(row);
+    auto lastLine = m_Owner->line(row);
 
     if (!lastLine.has_value())
-        return MinPos();
+        return minPos();
 
     return { row, lastLine.value().size() };
 }
 
-bool Cursor::OnFirstLine() const noexcept {
+bool Cursor::onFirstLine() const noexcept {
     return m_CursorLocation.m_Row == 0;
 }
 
-bool Cursor::OnLastLine() const noexcept {
-    return m_CursorLocation.m_Row == MaxPos().m_Row;
+bool Cursor::onLastLine() const noexcept {
+    return m_CursorLocation.m_Row == maxPos().m_Row;
 }
 
-bool Cursor::OnStartLine() const noexcept {
+bool Cursor::onStartLine() const noexcept {
     return m_CursorLocation.m_Col == 0;
 }
 
-bool Cursor::OnEndLine() const noexcept {
-    return m_CursorLocation.m_Col == EndLinePos().m_Col;
+bool Cursor::onEndLine() const noexcept {
+    return m_CursorLocation.m_Col == endLinePos().m_Col;
 }
 
-bool Cursor::OnFirstPos() const noexcept {
-    return OnFirstLine() && OnStartLine();
+bool Cursor::onFirstPos() const noexcept {
+    return onFirstLine() && onStartLine();
 }
 
-bool Cursor::OnLastPos() const noexcept {
-    return OnLastLine() && OnEndLine();
+bool Cursor::onLastPos() const noexcept {
+    return onLastLine() && onEndLine();
 }

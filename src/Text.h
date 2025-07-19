@@ -6,13 +6,14 @@
 
 #include "CursorLocation.hpp"
 #include "Drawable.hpp"
+#include "Config.hpp"
 
 class TextBox;
 
 /**
  * @brief   Class responsible for drawing and highlighting parts of a TextBox's buffer. 
  */
-class Text : public Drawable {
+class Text : public Drawable, public Transformable {
 public:
     /**
      * @brief       Creates a cursor owned by a TextBox.
@@ -24,8 +25,9 @@ public:
     /**
      * @brief   Draw any text and highlights that have been created.
      */
-    void Draw(sf::RenderWindow& window) const override;
-    void Update(double deltaTime) override;
+    void draw(sf::RenderTarget& target, sf::RenderStates states) const override;
+
+    void update(double deltaTime) override;
     
     /**
      * @brief   When called, updates the text to be
@@ -35,7 +37,7 @@ public:
      *          
      * @note    Does not create text objects that are out-of-frame.
      */
-    void UpdateText();
+    void updateText();
     
     /**
      * @brief           Gets the position of a character at 
@@ -49,12 +51,12 @@ public:
      * @returns         An 'sf::Vector2f' containing the position
      *                  of the character. 
      */
-    sf::Vector2f FindCharacterPos(CursorLocation pos) const;
+    sf::Vector2f findCharacterPos(CursorLocation pos) const;
 
     /**
      * @brief   Clears all highlights.
      */
-    void ClearHighlight() noexcept;
+    void clearHighlight() noexcept;
     
     /**
      * @brief           Highlights all text in a range by drawing 
@@ -67,13 +69,15 @@ public:
      * @param   begin   The begin position.
      * @param   end     The end position.
      */
-    void Highlight(CursorLocation begin, CursorLocation end) noexcept;
+    void highlight(CursorLocation begin, CursorLocation end) noexcept;
 private:
     /**
      * @brief   When called, updates the position of all sf::Text objects in m_Text.               
      */
-    void OnTransformChanged() override;
+    void onTransformChanged(sf::Vector2f oldPos, sf::Vector2f oldSize) override;
     
+    sf::Text buildText(const std::string& str, uint32_t fontSize, sf::Vector2f pos, const sf::Color& color) const noexcept;
+
     TextBox* m_Owner;
     std::vector<sf::Text> m_Text; 
     std::vector<sf::RectangleShape> m_Highlights;

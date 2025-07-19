@@ -34,7 +34,7 @@ struct CursorLocation {
         return !(*this > other);
     }
 
-    constexpr static CursorLocation NPos() noexcept {
+    constexpr static CursorLocation npos() noexcept {
         return { invalidIndex, invalidIndex };
     }
 

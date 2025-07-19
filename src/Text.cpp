@@ -1,64 +1,61 @@
 #include <optional>
 
-#include "Text.h"
+#include "FontManager.hpp"
 #include "TextBox.h"
+#include "Text.h"
 
-constexpr uint64_t TEXT_SIZE = 30;
-constexpr uint64_t CHUNK_SIZE = 256;
+Text::Text(TextBox* owner) : m_Owner(owner), m_Text(), m_Highlights() {
+    updateText();
+}
 
-// Helper. Used to get the default text for drawing. 
-static sf::Text& GetTextBase() {
-    static bool firstCall = true;
-    static sf::Font font;
+void Text::draw(sf::RenderTarget& target, sf::RenderStates states) const {
+    for (const auto& highlight : m_Highlights)
+        target.draw(highlight, states);
 
-    if (firstCall && !font.openFromFile("Fonts/CascadiaCode.ttf"))
-        throw std::runtime_error("Cannot load the font.");
+    for (const auto& font : m_Text)
+        target.draw(font, states);
+}
 
-    static sf::Text text(font, "", TEXT_SIZE);
+void Text::update(double deltaTime) {}
 
-    if (firstCall) {
-        text.setFillColor(sf::Color::White);
-        firstCall = false;
-    }
+void Text::onTransformChanged(sf::Vector2f oldPos, sf::Vector2f oldSize) {
+    sf::Vector2f deltaPos = m_Position - oldPos;
+
+    for (size_t i = 0; i < m_Text.size(); i++)
+        m_Text[i].move(deltaPos);
+}
+
+sf::Text Text::buildText(const std::string& str, uint32_t fontSize, sf::Vector2f pos, const sf::Color& color) const noexcept {
+    sf::Text text(FontManager::getFont());
+    text.setString(str);
+    text.setPosition(pos);
+    text.setFillColor(color);
+    text.setCharacterSize(fontSize);
 
     return text;
 }
 
-Text::Text(TextBox* owner) : m_Owner(owner), m_Text(), m_Highlights() {
-    UpdateText();
-}
-
-void Text::Draw(sf::RenderWindow& window) const {
-    for (const auto& highlight : m_Highlights)
-        window.draw(highlight);
-
-    for (const auto& text : m_Text)
-        window.draw(text);
-}
-
-void Text::Update(double deltaTime) {}
-
-void Text::OnTransformChanged() {
-    for (size_t i = 0; i < m_Text.size(); i++)
-        m_Text[i].setPosition({ m_Position.x, m_Position.y + TEXT_SIZE * i });
-}
-
-void Text::UpdateText() {
+void Text::updateText() {
     if (!m_Owner)
         return;
 
-    // Get the required variables to determine if the text is in frame. 
-    float viewYOffset = m_Owner->GetPosition().y + m_Owner->GetScroll().y;
-    float currentHeight = m_Size.y;
-    const auto& buffer = m_Owner->GetBuffer();
+    const auto& ownerTheme = m_Owner->getTheme();
+    float lineMargin = ownerTheme.lineMargin;
+    uint32_t fontSize = ownerTheme.fontSize;
+    const sf::Color& textColor = ownerTheme.textColor;
 
-    // Clearing and rebuilding the text each time UpdateText is called
+    // Get the required variables to determine if the text is in frame. 
+    float viewYOffset = m_Owner->getPosition().y + m_Owner->getScroll().y;
+    float currentHeight = m_Size.y;
+    const auto& buffer = m_Owner->getBuffer();
+
+    // Clearing and rebuilding the text each time updateText is called
     // might seem inefficient, but we're only rebuilding at most a few 
     // dozen or so objects, so it won't be too inefficent. 
     m_Text.clear();
 
     for (size_t i = 0; i < buffer.size(); i++) {
-        sf::Vector2 pos = { m_Position.x, m_Position.y + TEXT_SIZE * i };
+        sf::Vector2 pos = { m_Position.x, m_Position.y + (lineMargin + fontSize) * i };
 
         // Do not add any text that is out of frame. 
         if (pos.y < viewYOffset - currentHeight || pos.y > viewYOffset + currentHeight)
@@ -66,61 +63,64 @@ void Text::UpdateText() {
         
         const auto& line = buffer[i];
 
-        sf::Text text(GetTextBase());
-        text.setString(line);
-        text.setPosition(pos);
-        m_Text.emplace_back(text);
+        m_Text.emplace_back(buildText(line, fontSize, pos, textColor));
     }
 }
 
-sf::Vector2f Text::FindCharacterPos(CursorLocation pos) const {
+sf::Vector2f Text::findCharacterPos(CursorLocation pos) const {
     if (!m_Owner)
         return m_Position;
     
+    const auto& ownerTheme = m_Owner->getTheme();
+    float lineMargin = ownerTheme.lineMargin;
+    uint32_t fontSize = ownerTheme.fontSize;
+    const sf::Color& textColor = ownerTheme.textColor;
+
     auto [row, col] = pos;
 
     // 'Simulate' the text, because it might not actually exist yet.
-    auto line = m_Owner->Line(row);
+    auto line = m_Owner->line(row);
     if (!line.has_value())
         return m_Position;
        
     // Create a new text object and place it where it would be, if it existed. 
-    sf::Vector2 strPos = { m_Position.x, m_Position.y + TEXT_SIZE * row };
-    sf::Text text(GetTextBase());
-    text.setString(line.value());
-    text.setPosition(strPos);
-
-    return text.findCharacterPos(col);
+    sf::Vector2 strPos = { m_Position.x, m_Position.y + (lineMargin + fontSize) * row };
+    return buildText(line.value(), fontSize,strPos, sf::Color::Black).findCharacterPos(col);
 }
 
-void Text::ClearHighlight() noexcept {
+void Text::clearHighlight() noexcept {
     m_Highlights.clear();
 }
 
-void Text::Highlight(CursorLocation begin, CursorLocation end) noexcept {
-    ClearHighlight();
+void Text::highlight(CursorLocation begin, CursorLocation end) noexcept {
+    clearHighlight();
 
     if (!m_Owner || begin >= end)
         return;
 
-    float yCenter = m_Owner->GetPosition().y + m_Owner->GetScroll().y;
+    const auto& ownerTheme = m_Owner->getTheme();
+    uint32_t fontSize = ownerTheme.fontSize;
+    const auto& highlightColor = ownerTheme.selectedTextColor;
+
+    float yCenter = m_Owner->getPosition().y + m_Owner->getScroll().y;
     float currentHeight = m_Size.y;
 
     auto [beginRow, beginCol]   = begin;
     auto [endRow, endCol]       = end;
 
     // Helper to get a highligt for single-line positions. 
-    static const auto getHighlight = [](sf::Vector2f startPos, sf::Vector2f endPos) -> sf::RectangleShape {
-        sf::RectangleShape shape({ endPos.x - startPos.x, TEXT_SIZE });
+    static const auto getHighlight = 
+        [fontSize, highlightColor](sf::Vector2f startPos, sf::Vector2f endPos) -> sf::RectangleShape {
+        sf::RectangleShape shape({ endPos.x - startPos.x, static_cast<float>(fontSize) });
         shape.setPosition(startPos);
-        shape.setFillColor(sf::Color::Blue);
+        shape.setFillColor(highlightColor);
         return shape;
     };
 
     if (beginRow == endRow) {
         // Case 1. Same line.
         // Only highlight the characters in between beginCol and endCol.
-        m_Highlights.push_back(getHighlight(FindCharacterPos(begin), FindCharacterPos(end)));
+        m_Highlights.push_back(getHighlight(findCharacterPos(begin), findCharacterPos(end)));
     }
     else {
         // Case 2. Different lines.
@@ -131,23 +131,23 @@ void Text::Highlight(CursorLocation begin, CursorLocation end) noexcept {
         // 1. 
         // We use invalidIndex, as any out-of-bounds index gets the
         // position of the last character in the line. 
-        m_Highlights.push_back(getHighlight(FindCharacterPos(begin),
-                                              FindCharacterPos({begin.m_Row, CursorLocation::invalidIndex })));
+        m_Highlights.push_back(getHighlight(findCharacterPos(begin),
+                                              findCharacterPos({begin.m_Row, CursorLocation::invalidIndex })));
 
         // 2.
-        m_Highlights.push_back(getHighlight(FindCharacterPos({end.m_Row, 0}),
-                                              FindCharacterPos(end)));
+        m_Highlights.push_back(getHighlight(findCharacterPos({end.m_Row, 0}),
+                                              findCharacterPos(end)));
 
         // 3. 
         for (size_t i = beginRow + 1; i < endRow; i++) {
             // Make sure the highlight is in frame.
             // TODO: What about culling 1. and 2.?
-            float highlightY = m_Position.y + TEXT_SIZE * i;
+            float highlightY = m_Position.y + fontSize * i;
             if (highlightY < yCenter - currentHeight || highlightY > yCenter + currentHeight)
                 continue;
 
-            m_Highlights.push_back(getHighlight(FindCharacterPos({i, 0}),
-                                                  FindCharacterPos({i, CursorLocation::invalidIndex})));
+            m_Highlights.push_back(getHighlight(findCharacterPos({i, 0}),
+                                                  findCharacterPos({i, CursorLocation::invalidIndex})));
         }
     }
 }

@@ -3,6 +3,9 @@
 #include <optional>
 #include <functional>
 
+#include "LineIndicator.h"
+#include "Config.hpp"
+#include "Theme.hpp"
 #include "Cursor.h"
 #include "Text.h"
 
@@ -13,7 +16,7 @@
  *          Also handles drawing the contents of the buffer, among
  *          various other things.
  */
-class TextBox : public Drawable {
+class TextBox : public Drawable, public Transformable, public Stylable<Theme::TextBoxTheme> {
 public:
     /**
      * @brief       Creates a TextBox object.
@@ -28,31 +31,31 @@ public:
      *
      * @param   window The window to draw to.
      */
-    void Draw(sf::RenderWindow& window) const override;
+    void draw(sf::RenderTarget& target, sf::RenderStates states) const override;
 
     /**
      * @brief   Update the elements of the TextBox.
      *
      * @param   deltaTime The time elapsed since the last frame.
      */
-    void Update(double deltaTime) noexcept override;
+    void update(double deltaTime) noexcept override;
 
     /**
-     * @returns The position of the cursor.
+     * @returns The location of the cursor.
      */
-    CursorLocation GetCursorLocation() const noexcept;
+    CursorLocation getCursorLocation() const noexcept;
 
     /**
-     * @returns The position of the cursor.
+     * @returns The scroll of the TextBox.
      */
-    sf::Vector2f GetScroll() const noexcept;
+    sf::Vector2f getScroll() const noexcept;
 
     /**
      * @brief       Get the buffer of the TextBox.
      *
      * @returns     A const-reference to the m_Buffer vector.
      */
-    const std::vector<std::string>& GetBuffer() const noexcept;
+    const std::vector<std::string>& getBuffer() const noexcept;
 
     /**
      * @brief       Get a line at a specific row.
@@ -63,12 +66,12 @@ public:
      *              or 'std::nullopt' if the provided row
      *              is out of range. 
      */
-    std::optional<std::string> Line(size_t row) const noexcept;
+    std::optional<std::string> line(size_t row) const noexcept;
 
     /**
      * @brief   Get the amount of lines.
      */
-    size_t GetLineCount() const noexcept;
+    size_t getLineCount() const noexcept;
 
     /**
      * @brief   Get a character at a specific position, even if selecting.
@@ -78,7 +81,7 @@ public:
      * @returns The character at the provided position cursor 
                 or 'std::nullopt' if the position is invalid. 
      */
-    std::optional<char> GetCharAt(const CursorLocation& pos) const noexcept;
+    std::optional<char> getCharAt(const CursorLocation& pos) const noexcept;
 
     /**
      * @brief   Get the character to the right of the cursor, even if selecting.
@@ -86,7 +89,7 @@ public:
      * @returns The character to the right of the cursor or 'std::nullopt'
      *          if there is nothing to the right.
      */
-    std::optional<char> GetRightChar() const noexcept;
+    std::optional<char> getRightChar() const noexcept;
 
     /**
      * @brief   Get the character to the left of the cursor, even if selecting.
@@ -94,7 +97,7 @@ public:
      * @returns The character to the left of the cursor or 'std::nullopt'
      *          if there is nothing to the left.
      */
-    std::optional<char>GetLeftChar() const noexcept;
+    std::optional<char>getLeftChar() const noexcept;
 
     /**
      * @brief   Adds a character to the right of the cursor.
@@ -103,7 +106,7 @@ public:
      *
      * @param   c The character to add.
      */
-    void Add(char c) noexcept;
+    void add(char c) noexcept;
 
     /**
      * @brief   Adds a string to the right of the cursor.
@@ -112,7 +115,7 @@ public:
      *
      * @param   str The string to add.
      */
-    void Add(const std::string& str) noexcept;
+    void add(const std::string& str) noexcept;
 
     /**
      * @brief   Adds a tab where the cursor is, by inserting spaces.
@@ -120,7 +123,7 @@ public:
      * @note    The number of spaces depends on the defined tab width.
      * @note    Clears selection.
      */
-    void AddTab() noexcept;
+    void addTab() noexcept;
 
     /**
      * @brief   Removes a character to the left of the cursor.
@@ -129,7 +132,7 @@ public:
      *
      * @returns True if the removal was successful, false otherwise.
      */
-    bool Remove() noexcept;
+    bool remove() noexcept;
 
     /**
      * @brief   If the character left of the cursor is alphanumeric,
@@ -138,7 +141,7 @@ public:
      *
      * @returns True if the SkipRemove was successful, false otherwise.
      */
-    bool SkipRemove() noexcept;
+    bool skipRemove() noexcept;
 
     /**
      * @brief   Removes all characters in a range.
@@ -151,7 +154,7 @@ public:
      *
      * @returns True if successful, false if minPos <= begin < end <= maxPos isn't upheld.
      */
-    bool RemoveRange(CursorLocation begin, CursorLocation end) noexcept;
+    bool removeRange(CursorLocation begin, CursorLocation end) noexcept;
 
     /**
      * @brief   Removes a tab, by removing leading spaces.
@@ -160,31 +163,31 @@ public:
      *
      * @returns True if at least one space was removed, false otherwise.
      */
-    bool RemoveTab() noexcept;
+    bool removeTab() noexcept;
 
     /**
      * @brief   Check if text is currently being selected.
      *
      * @returns True if selecting, false otherwise.
      */
-    bool IsSelecting() const noexcept;
+    bool isSelecting() const noexcept;
 
     /**
      * @brief   Starts selecting from the current position of the cursor.
      */
-    void StartSelecting() noexcept;
+    void startSelecting() noexcept;
 
     /**
      * @brief   Stops selecting entirely.
      */
-    void StopSelecting() noexcept;
+    void stopSelecting() noexcept;
 
     /**
      * @brief   Selects the entire contents of the TextBox.
      *
      * @note    Functions identically, even if text is already selected..
      */
-    void SelectAll() noexcept;
+    void selectAll() noexcept;
 
     /**
      * @brief   Get the currently selected text.
@@ -192,7 +195,7 @@ public:
      * @returns The currently selected text, or 'std::nullopt'
      *          if nothing is selected.
      */
-    std::optional<std::string> GetSelection() const noexcept;
+    std::optional<std::string> getSelection() const noexcept;
 
     /**
      * @brief   Moves the cursor to a position.
@@ -205,93 +208,93 @@ public:
      *
      * @returns True if the move was successful, false if the position was invalid.
      */
-    bool MoveTo(CursorLocation pos) noexcept;
+    bool moveTo(CursorLocation pos) noexcept;
 
     /**
      * @brief   Tries to move the cursor up.
      *
      * @returns True if the cursor was moved up, false if it cannot be moved up.
      */
-    bool MoveUp() noexcept;
+    bool moveUp() noexcept;
 
     /**
      * @brief   Tries to move the cursor down.
      *
      * @returns True if the cursor was moved down, false if it cannot be moved down.
      */
-    bool MoveDown() noexcept;
+    bool moveDown() noexcept;
 
     /**
      * @brief   Tries to move the cursor left.
      *
      * @returns True if the cursor was moved left, false if it cannot be moved left.
      */
-    bool MoveLeft() noexcept;
+    bool moveLeft() noexcept;
 
     /**
      * @brief   Tries to move the cursor right.
      *
      * @returns True if the cursor was moved right, false if it cannot be moved right.
      */
-    bool MoveRight() noexcept;
+    bool moveRight() noexcept;
 
     /**
      * @brief   Skips to the next-left character of a different class.
      *
      * @returns True if the skip was successful, false otherwise.
      */
-    bool SkipLeft() noexcept;
+    bool skipLeft() noexcept;
 
     /**
      * @brief   Skips to the next-right character of a different class.
      *
      * @returns True if the skip was successful, false otherwise.
      */
-    bool SkipRight() noexcept;
+    bool skipRight() noexcept;
 
     /**
      * @brief   Moves the cursor to the very start of the text.
      */
-    void MoveTop() noexcept;
+    void moveTop() noexcept;
 
     /**
      * @brief   Moves the cursor to the very end of the text.
      */
-    void MoveBottom() noexcept;
+    void moveBottom() noexcept;
 
     /**
      * @brief   Moves the cursor to the start of the line.
      */
-    void MoveStart() noexcept;
+    void moveStart() noexcept;
 
     /**
      * @brief   Moves the cursor to the end of the line.
      */
-    void MoveEnd() noexcept;
+    void moveEnd() noexcept;
 
     /**
      * @brief   Moves the view up.
      */
-    void ScrollUp() noexcept;
+    void scrollUp() noexcept;
 
     /**
      * @brief   Moves the view down.
      */
-    void ScrollDown() noexcept;
+    void scrollDown() noexcept;
 
     /**
      * @brief   Pastes the contents of the clipboard where the cursor's current position is.
      *
      * @note    Removes selection.
      */
-    void Paste() noexcept;
+    void paste() noexcept;
 
     /**
      * @brief   Sets the contents of the clipboard to the currently selected text.
      *
      * @note    Does nothing if no text is selected.
      */
-    void Copy() const noexcept;
+    void copy() const noexcept;
 
 private:
     /**
@@ -299,14 +302,14 @@ private:
      *
      * @note    Does nothing if no text is selected.
      */
-    void EnsureCursorVisibility() noexcept;
+    void ensureCursorVisibility() noexcept;
 
     /**
      * @brief   Clears the selected text.
      * 
      * @returns True if anything was cleared at all.
      */
-    bool ClearSelection() noexcept;
+    bool clearSelection() noexcept;
 
     /**
      * @brief       Scan left from the current cursor position (exclusive) until a character
@@ -317,7 +320,7 @@ private:
      * @return      Index of the first matching character, or 'm_Cursor.MinPos()'
      *              if none is found.
      */
-    CursorLocation FindFirstLeft(const std::function<bool(char)>& pred) const;
+    CursorLocation findFirstLeft(const std::function<bool(char)>& pred) const;
 
     /**
      * @brief       Scan right from the current cursor position (exclusive) until a character
@@ -328,14 +331,7 @@ private:
      * @return      Index of the first matching character, or 'CursorPos::MaxPos()'
      *              if none is found.
      */
-    CursorLocation FindFirstRight(const std::function<bool(char)>& pred) const;
-
-    /**
-     * @brief   If m_ShouldUpdateString is true, sets the string of m_Text.
-     *
-     * @note    Sets m_ShouldUpdateString to false after updating.
-     */
-    void UpdateString();
+    CursorLocation findFirstRight(const std::function<bool(char)>& pred) const;
 
     /**
      * @brief   If m_ShouldUpdateView is true, updates the position
@@ -344,7 +340,7 @@ private:
      * @note    Sets m_ShouldUpdateView to false after updating.
      * @note    Should be called before UpdateScroll.
      */
-    void UpdateView();
+    void updateView();
 
     /**
      * @brief   If m_ShouldUpdateScroll is true, updates the scroll
@@ -353,24 +349,27 @@ private:
      * @note    Sets m_ShouldUpdateScroll to false after updating.
      * @note    Should be called after UpdateView.
      */
-    void UpdateScroll();
+    void updateScroll();
+
+    void updateElements();
 
     /**
      * @brief Called whenever m_Position or m_Size change.
      *        Sets the size and position of various elements.   
      */
-    void OnTransformChanged() override;
+    void onTransformChanged(sf::Vector2f oldPos, sf::Vector2f oldSize) override;
 
     Cursor m_Cursor; // The TextBox's cursor. Also manages the position of the cursor, in terms of rows and columns. 
     Text m_Text;
 
+    LineIndicator m_LineIndicator;
     sf::RectangleShape m_Background, m_LineHighlight;
     CursorLocation m_SelectPos; // The position of the cursor when selection was started. No selection is indicated by CursorLocation::NPos().
     sf::View m_View; // The view that displays the TextBox. 
     sf::Vector2f m_Scroll; // The scroll of the TextBox. 
 
-    // When true, the string, view or scroll will be updated. 
-    bool m_ShouldUpdateString, m_ShouldUpdateView, m_ShouldUpdateScroll; 
+    // When true, the view or scroll will be updated. 
+    bool m_ShouldUpdateView, m_ShouldUpdateScroll; 
 
     std::vector<std::string> m_Buffer; // Buffer of the TextBox. 
 };
