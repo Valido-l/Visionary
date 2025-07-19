@@ -13,7 +13,7 @@ public:
         setPosition(pos); setSize(size);
     }
 
-    void draw(sf::RenderTarget& target, sf::RenderStates states) const {
+    void draw(sf::RenderTarget& target, sf::RenderStates states) const override {
         const auto oldView = target.getView();
         sf::Vector2u windowSize = target.getSize();
         sf::View textEditorView(m_Size / 2.0f, m_Size);

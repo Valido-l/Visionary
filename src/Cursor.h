@@ -24,7 +24,7 @@ public:
      */
     void draw(sf::RenderTarget& target, sf::RenderStates states) const override;
 
-    virtual void update(double deltaTime);
+    virtual void update(double deltaTime) override;
 
     /**
      * @brief       Moves the cursor to a provided location.
@@ -145,7 +145,7 @@ private:
      * @brief   When called, updates the position and size of
      *          the cursor rectangle. 
      */
-    virtual void onTransformChanged(sf::Vector2f oldPos, sf::Vector2f oldSize);
+    virtual void onTransformChanged(sf::Vector2f oldPos, sf::Vector2f oldSize) override;
 
     CursorLocation m_CursorLocation;
     sf::RectangleShape m_Shape;
