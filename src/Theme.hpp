@@ -104,7 +104,7 @@ namespace Theme {
             cursor, lineIndicator, textBox)
 
     template <typename T> 
-    inline T& Get();
+    inline T& Get() noexcept;
 
     template <>
     inline AllThemes& Get<AllThemes>() noexcept {
